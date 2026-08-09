@@ -10,6 +10,14 @@
     "cli"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vijaysai1102/PingBack.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vijaysai1102/PingBack/issues"
+  },
+  "homepage": "https://github.com/vijaysai1102/PingBack#readme",
   "type": "module",
   "engines": {
     "node": ">=20"
