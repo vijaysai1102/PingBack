@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { isPingBackError, toMessage } from '../utils/errors.js';
@@ -99,11 +99,17 @@ export async function main(argv: string[] = process.argv): Promise<number> {
   }
 }
 
+/**
+ * Both paths are resolved through symlinks before comparing. A global npm
+ * install on macOS and Linux puts a symlink on PATH, so argv[1] is the link
+ * while import.meta.url is the real file; comparing them unresolved makes
+ * every command exit silently with status 0.
+ */
 function isDirectRun(): boolean {
   const entry = process.argv[1];
   if (entry === undefined) return false;
   try {
-    return resolve(entry) === fileURLToPath(import.meta.url);
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
   } catch {
     return false;
   }

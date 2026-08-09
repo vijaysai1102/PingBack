@@ -88,11 +88,18 @@ jobs:
           echo "packed $TARBALL"
           npm install -g "./$TARBALL"
 
+      # Asserts on output, not just the exit status: a CLI whose entry point
+      # never fires exits 0 while printing nothing at all.
       - name: CLI runs from outside the repo
         working-directory: ${{ runner.temp }}
         run: |
-          pingback --version
-          pingback --help
+          VERSION=$(node -p "require('$GITHUB_WORKSPACE/package.json').version")
+          pingback --version | tee version.txt
+          grep -q "$VERSION" version.txt || { echo "::error::pingback --version printed no version"; exit 1; }
+
+          pingback --help | tee help.txt
+          grep -q "Never miss when your AI coding agent needs you" help.txt \
+            || { echo "::error::pingback --help printed no description"; exit 1; }
 
       - name: Bundled sounds resolve after global install
         working-directory: ${{ runner.temp }}
