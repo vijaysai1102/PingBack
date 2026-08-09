@@ -1,4 +1,4 @@
-import { createServer, type Server, type Socket } from 'node:net';
+import { connect, createServer, type Server, type Socket } from 'node:net';
 import { existsSync, rmSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { PingBackError } from '../../utils/errors.js';
@@ -34,6 +34,34 @@ function isUnixSocketPath(endpoint: string): boolean {
   return !endpoint.startsWith('\\\\');
 }
 
+/** Error codes that prove nothing is accepting on a socket path. */
+const DEAD_SOCKET_CODES = new Set(['ECONNREFUSED', 'ENOTSOCK', 'ENOENT']);
+
+/**
+ * Probes whether a daemon is actually accepting on a Unix socket path.
+ * Anything ambiguous counts as live, so a running daemon is never displaced.
+ */
+function socketIsLive(endpoint: string, timeoutMs = 500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect(endpoint);
+
+    const finish = (live: boolean): void => {
+      socket.destroy();
+      resolve(live);
+    };
+
+    socket.setTimeout(timeoutMs, () => {
+      finish(true);
+    });
+    socket.once('connect', () => {
+      finish(true);
+    });
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      finish(!DEAD_SOCKET_CODES.has(error.code ?? ''));
+    });
+  });
+}
+
 /**
  * Accepts newline-delimited JSON requests over a named pipe (Windows) or a
  * Unix domain socket (macOS). PingBack never opens a TCP port.
@@ -54,7 +82,7 @@ export class IpcServer {
   }
 
   async listen(): Promise<void> {
-    this.#removeStaleSocket();
+    await this.#removeStaleSocket();
 
     const server = createServer((socket) => {
       this.#handleConnection(socket);
@@ -107,17 +135,24 @@ export class IpcServer {
       });
     });
 
-    this.#removeStaleSocket();
+    await this.#removeStaleSocket();
     this.#logger.info('ipc closed');
   }
 
   /**
    * A Unix socket file outlives a crashed daemon and would make listen fail
    * with EADDRINUSE, so remove it when no process is actually accepting.
+   *
+   * The liveness probe matters: removing the file unconditionally would let a
+   * second daemon delete a running daemon's socket and silently take over,
+   * leaving the first process alive but unreachable. Windows named pipes are
+   * not files, so they are left to fail with EADDRINUSE instead.
    */
-  #removeStaleSocket(): void {
+  async #removeStaleSocket(): Promise<void> {
     if (!isUnixSocketPath(this.#endpoint)) return;
     if (!existsSync(this.#endpoint)) return;
+    if (await socketIsLive(this.#endpoint)) return;
+
     try {
       rmSync(this.#endpoint, { force: true });
     } catch {

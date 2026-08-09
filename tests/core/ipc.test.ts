@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -136,6 +137,38 @@ describe('IPC round trip', () => {
     const duplicate = new IpcServer({ endpoint, token: TOKEN, handler: () => ({}) });
 
     await expect(duplicate.listen()).rejects.toBeInstanceOf(PingBackError);
+  });
+
+  it('leaves the running daemon reachable after a duplicate is refused', async () => {
+    const endpoint = await startServer(() => ({ original: true }));
+    const duplicate = new IpcServer({ endpoint, token: TOKEN, handler: () => ({}) });
+
+    await expect(duplicate.listen()).rejects.toBeInstanceOf(PingBackError);
+
+    // The refused server must not have unlinked the live socket on macOS.
+    await expect(sendRequest({ endpoint, token: TOKEN }, 'ping')).resolves.toEqual({
+      original: true,
+    });
+  });
+
+  it('takes over a socket file left behind by a crashed daemon', async () => {
+    // Windows named pipes are not files, so there is nothing to leave behind.
+    if (process.platform === 'win32') return;
+
+    const endpoint = makeEndpoint();
+    writeFileSync(endpoint, '');
+
+    const server = new IpcServer({
+      endpoint,
+      token: TOKEN,
+      handler: () => ({ fresh: true }),
+    });
+    await server.listen();
+    servers.push(server);
+
+    await expect(sendRequest({ endpoint, token: TOKEN }, 'ping')).resolves.toEqual({
+      fresh: true,
+    });
   });
 
   it('stops answering once closed', async () => {
