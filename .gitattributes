@@ -1,0 +1,5 @@
+# Prettier is configured with endOfLine: "lf". Without this, Windows checkouts
+# convert to CRLF and `npm run format:check` fails on Windows CI runners.
+* text=auto eol=lf
+
+*.wav binary

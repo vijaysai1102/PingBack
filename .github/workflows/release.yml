@@ -1,0 +1,163 @@
+name: Release
+
+# Validates that a tagged commit is genuinely publishable, without publishing.
+#
+# To start publishing for real:
+#   1. Add an NPM_TOKEN repository secret (npm automation token).
+#   2. Uncomment the `publish` job at the bottom of this file.
+# Until then this workflow proves the release would succeed and uploads the
+# exact tarball as a build artifact.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The sound assets are generated here, not committed.
+      - run: npm run build
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Install the packed tarball globally
+        run: |
+          TARBALL=$(npm pack --silent)
+          npm install -g "./$TARBALL"
+
+      - name: CLI works outside the repo
+        working-directory: ${{ runner.temp }}
+        run: |
+          pingback --version
+          pingback start
+          pingback status
+          pingback stop
+
+  package:
+    name: Validate and upload tarball
+    needs: verify
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      # A tag that disagrees with package.json would publish the wrong version.
+      - name: Tag matches package.json version
+        if: github.ref_type == 'tag'
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json: $PKG_VERSION"
+          echo "tag:          $TAG_VERSION"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      # Runs the real publish path minus the upload. Works without a token.
+      - name: Publish dry run
+        run: npm publish --dry-run
+
+      - name: Pack
+        id: pack
+        run: |
+          TARBALL=$(npm pack --silent)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      # Guards the two mistakes that are invisible until a user installs:
+      # a tarball missing its runtime assets, or one shipping the test suite.
+      - name: Tarball contains what it should
+        run: |
+          node -e "
+            const { execSync } = require('node:child_process');
+            const info = JSON.parse(execSync('npm pack --dry-run --json', { encoding: 'utf8' }))[0];
+            const files = info.files.map((f) => f.path);
+
+            const required = [
+              'dist/cli/index.js',
+              'dist/daemon/main.js',
+              'dist/agents/claude/hook-entry.js',
+              'assets/sounds/attention.wav',
+              'assets/sounds/completion.wav',
+              'assets/sounds/error.wav',
+              'README.md',
+            ];
+
+            const missing = required.filter((f) => !files.includes(f));
+            if (missing.length > 0) {
+              console.error('missing from tarball:\n  ' + missing.join('\n  '));
+              process.exit(1);
+            }
+
+            const leaked = files.filter((f) => f.startsWith('tests/') || f.endsWith('.test.js'));
+            if (leaked.length > 0) {
+              console.error('tests leaked into tarball:\n  ' + leaked.join('\n  '));
+              process.exit(1);
+            }
+
+            console.log('tarball ok: ' + files.length + ' files');
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.tarball }}
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+
+  # Enable once an NPM_TOKEN secret exists. `id-token: write` plus
+  # --provenance publishes a signed attestation linking the package to this
+  # workflow run, which requires a public repository.
+  #
+  # publish:
+  #   name: Publish to npm
+  #   needs: package
+  #   runs-on: windows-latest
+  #   permissions:
+  #     contents: read
+  #     id-token: write
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
+  #         cache: npm
+  #         registry-url: https://registry.npmjs.org
+  #     - run: npm ci
+  #     - run: npm run build
+  #     - run: npm publish --provenance --access public
+  #       env:
+  #         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

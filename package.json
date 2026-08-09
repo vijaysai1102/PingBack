@@ -1,0 +1,62 @@
+{
+  "name": "pingback-cli",
+  "version": "0.1.0",
+  "description": "Never miss when your AI coding agent needs you. Local desktop notifications when Claude Code needs your attention.",
+  "keywords": [
+    "claude-code",
+    "notifications",
+    "developer-tools",
+    "ai-agents",
+    "cli"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "win32",
+    "darwin"
+  ],
+  "bin": {
+    "pingback": "dist/cli/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "assets",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/generate-sounds.mjs && tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "node-notifier": "^10.0.1"
+  },
+  "overrides": {
+    "node-notifier": {
+      "uuid": "^11.1.1"
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "@types/node-notifier": "^8.0.5",
+    "eslint": "^10.8.1",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
+  }
+}

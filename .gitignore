@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+assets/sounds/*.wav
+*.log
+*.tgz
+.DS_Store
+.eslintcache
