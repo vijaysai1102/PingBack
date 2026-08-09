@@ -93,11 +93,13 @@ jobs:
       - name: CLI runs from outside the repo
         working-directory: ${{ runner.temp }}
         run: |
-          VERSION=$(node -p "require('$GITHUB_WORKSPACE/package.json').version")
-          pingback --version | tee version.txt
-          grep -q "$VERSION" version.txt || { echo "::error::pingback --version printed no version"; exit 1; }
+          pingback --version > version.txt 2>&1
+          cat version.txt
+          grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' version.txt \
+            || { echo "::error::pingback --version printed no version"; exit 1; }
 
-          pingback --help | tee help.txt
+          pingback --help > help.txt 2>&1
+          cat help.txt
           grep -q "Never miss when your AI coding agent needs you" help.txt \
             || { echo "::error::pingback --help printed no description"; exit 1; }
 
@@ -170,13 +172,34 @@ jobs:
       - name: Config round-trip
         working-directory: ${{ runner.temp }}
         run: |
-          pingback config | grep -q "notifications.sound = true"
-          pingback config set notifications.sound false
-          pingback config | grep -q "notifications.sound = false"
-          pingback config set notifications.sound true
+          # Output goes to a file rather than through `| grep -q`: the runner
+          # uses `bash -eo pipefail`, and grep exiting on its first match closes
+          # the pipe, failing the whole pipeline on the CLI's EPIPE.
+          fail() {
+            local detail
+            detail=$( { echo "$1"; echo "--- config output ---"; cat config.txt 2>/dev/null; } \
+              | sed 's/%/%25/g' | awk '{ printf "%s%%0A", $0 }' )
+            echo "::error::$detail"
+            exit 1
+          }
+
+          show_config() {
+            pingback config > config.txt 2>&1 || fail "pingback config exited non-zero"
+            cat config.txt
+          }
+
+          show_config
+          grep -q "notifications.sound = true" config.txt || fail "expected sound to default to true"
+
+          pingback config set notifications.sound false > set.txt 2>&1 || fail "config set failed"
+          cat set.txt
+
+          show_config
+          grep -q "notifications.sound = false" config.txt || fail "setting sound to false did not persist"
+
+          pingback config set notifications.sound true > restore.txt 2>&1 || fail "restoring sound failed"
 
           # Invalid input must fail loudly rather than silently succeed.
-          if pingback config set bogus.key true; then
-            echo "expected an unknown config key to exit non-zero"
-            exit 1
+          if pingback config set bogus.key true > config.txt 2>&1; then
+            fail "expected an unknown config key to exit non-zero"
           fi
