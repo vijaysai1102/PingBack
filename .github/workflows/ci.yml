@@ -115,24 +115,49 @@ jobs:
       - name: Daemon lifecycle
         working-directory: ${{ runner.temp }}
         run: |
+          daemon_log() {
+            tail -n 40 "$HOME/Library/Logs/PingBack/daemon.log" 2>/dev/null && return 0
+            tail -n 40 "$LOCALAPPDATA/PingBack/logs/daemon.log" 2>/dev/null && return 0
+            echo "(no daemon log found)"
+          }
+
+          # Reported as a workflow error so the reason and the daemon log are
+          # visible on the run summary without downloading the raw log.
+          fail() {
+            local detail
+            detail=$(
+              {
+                echo "$1"
+                echo "--- last status output ---"
+                cat status.txt 2>/dev/null || echo "(none)"
+                echo "--- daemon log ---"
+                daemon_log
+              } | sed 's/%/%25/g' | awk '{ printf "%s%%0A", $0 }'
+            )
+            echo "::error::$detail"
+            exit 1
+          }
+
           # "Not running" also contains the word "running", so the running state
           # is asserted by the absence of that phrase rather than by matching it.
           assert_stopped() {
-            pingback status > status.txt || { cat status.txt; exit 1; }
+            pingback status > status.txt 2>&1 || fail "pingback status exited non-zero"
             cat status.txt
-            grep -q "Not running" status.txt || { echo "expected stopped"; exit 1; }
+            grep -q "Not running" status.txt || fail "expected the daemon to be stopped"
           }
           assert_running() {
-            pingback status > status.txt || { cat status.txt; exit 1; }
+            pingback status > status.txt 2>&1 || fail "pingback status exited non-zero"
             cat status.txt
-            if grep -q "Not running" status.txt; then echo "expected running"; exit 1; fi
-            grep -q "Running" status.txt || { echo "expected running"; exit 1; }
+            if grep -q "Not running" status.txt; then fail "expected the daemon to be running"; fi
+            grep -q "Running" status.txt || fail "expected the daemon to be running"
           }
 
           assert_stopped
-          pingback start
+          pingback start > start.txt 2>&1 || { cp start.txt status.txt; fail "pingback start failed"; }
+          cat start.txt
           assert_running
-          pingback stop
+          pingback stop > stop.txt 2>&1 || { cp stop.txt status.txt; fail "pingback stop failed"; }
+          cat stop.txt
           assert_stopped
 
       - name: Config round-trip
