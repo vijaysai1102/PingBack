@@ -271,6 +271,8 @@ Two constraints shape the workflow. The build must run before the tests, because
 
 PingBack keeps agent-specific code out of the core. Nothing in `core/`, `notifications/`, or `sessions/` knows that Claude Code exists.
 
+The short agent brief (loaded every Claude Code session) lives in [`CLAUDE.md`](CLAUDE.md). The full v0.1 engineering specification is in [`docs/SPEC.md`](docs/SPEC.md) so it does not burn context on every turn.
+
 ```text
 src/
   core/           events, routing, IPC, daemon
