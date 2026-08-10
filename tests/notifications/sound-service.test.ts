@@ -46,7 +46,8 @@ describe('platform sound commands', () => {
   it('uses PowerShell SoundPlayer on Windows', () => {
     const command = createPlatform(windowsHost).buildSoundCommand('C:\\a\\attention.wav');
 
-    expect(command.command).toBe('powershell.exe');
+    expect(command.command.toLowerCase()).toMatch(/powershell\.exe$/);
+    expect(command.command).toMatch(/WindowsPowerShell/i);
     expect(command.args.join(' ')).toContain('Media.SoundPlayer');
     expect(command.args.join(' ')).toContain('C:\\a\\attention.wav');
   });

@@ -6,13 +6,24 @@ const APP_DIR = 'PingBack';
 /**
  * Windows has no bundled CLI audio player, but PowerShell's SoundPlayer is
  * always present and plays a WAV without any extra install.
+ *
+ * Use an absolute path: the daemon may start with a thin PATH (service-like
+ * launches, some IDE terminals) where bare `powershell.exe` resolves to ENOENT.
  */
 function buildSoundCommand(filePath: string): SoundCommand {
   // Single quotes are the PowerShell literal-string delimiter; doubling
   // escapes any quote inside the path.
   const quoted = filePath.replace(/'/g, "''");
+  const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows';
+  const powershell = path.win32.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
   return {
-    command: 'powershell.exe',
+    command: powershell,
     args: [
       '-NoProfile',
       '-NonInteractive',
