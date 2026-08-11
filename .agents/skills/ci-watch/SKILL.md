@@ -7,7 +7,7 @@ description: Pre-push verification and automated GitHub Actions CI monitoring wi
 
 ## Overview
 
-Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all CI checks pass (capped at 2 remediation attempts).
+Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all checks pass (capped at 2 remediation attempts).
 
 ---
 
@@ -50,38 +50,53 @@ Once local checks pass cleanly:
 2. **Push your commit to GitHub**:
    ```powershell
    git push
+   # If on a newly created branch without an upstream tracking branch:
+   # git push -u origin HEAD
    ```
 3. **Get the current commit SHA**:
    ```powershell
    $commitSha = (git rev-parse HEAD).Trim()
    ```
 4. **Locate the GitHub Actions workflow run for this commit using the GitHub CLI (`gh`)**:
+   GitHub Actions may take 5–15 seconds to register a newly pushed commit. Filter by the workflow name (e.g., `"CI"`) and check that `$rawId` is not empty or `"null"` (since `jq` on an unregistered run outputs `"null"`, which PowerShell evaluates as truthy):
    ```powershell
-   gh run list --commit $commitSha --limit 1
+   $runId = ""
+   for ($i = 0; $i -lt 6; $i++) {
+       $rawId = (gh run list --workflow "CI" --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId 2>$null')
+       if ($rawId -and $rawId -ne "null") {
+           $runId = $rawId
+           break
+       }
+       Start-Sleep -Seconds 5
+   }
    ```
 
 ---
 
 ## Phase 3: Post-Push GitHub CI Monitoring
 
-Monitor the remote CI workflow until completion using GitHub CLI.
+Monitor the remote CI workflow until completion using non-interactive querying with `gh`.
 
-### Polling / Watching the CI Run
+### Polling the CI Run
 
-For non-interactive agent environments, query status using JSON format to avoid UI terminal locks:
+To prevent UI terminal locks and API rate-limiting, poll the run status at 15-second intervals. Safely check `$json` before piping to `ConvertFrom-Json` to avoid crashing on network blips or `stderr` messages:
 
 ```powershell
-# Query status and conclusion in JSON format
-$run = gh run view <run-id> --json status,conclusion | ConvertFrom-Json
-# $run.status -> "in_progress", "completed"
+# Poll run status until completion
+do {
+    $json = gh run view $runId --json status,conclusion 2>$null
+    if ($json) {
+        $run = $json | ConvertFrom-Json
+        if ($run.status -eq "completed") { break }
+    }
+    Start-Sleep -Seconds 15
+} while ($true)
+
+# $run.status -> "completed"
 # $run.conclusion -> "success", "failure", "cancelled"
 ```
 
-Alternatively, watch the run directly if running interactively:
-
-```powershell
-gh run watch <run-id>
-```
+> **Note**: Avoid interactive streaming commands like `gh run watch` in automated subagent or background sessions as they can lock up terminal standard input/output streams. When monitoring in an agent session, consider using non-blocking background tasks or scheduled checks to avoid holding synchronous turns.
 
 ### Evaluating CI Outcome
 
@@ -104,10 +119,10 @@ Use `gh` to retrieve log details for the failed run:
 
 ```powershell
 # View only the failed steps and error output
-gh run view <run-id> --log-failed
+gh run view $runId --log-failed
 
 # View full log if needed
-gh run view <run-id> --log
+gh run view $runId --log
 ```
 
 Identify:
@@ -174,7 +189,7 @@ git push
 - [ ] Verified `gh auth status` and checked pre-flight git status
 - [ ] Ran local pre-push checks (`format:check`, `lint`, `typecheck`, `build`, `test`)
 - [ ] Pushed commit to GitHub
-- [ ] Monitored GitHub Actions run via non-interactive `gh run view --json status,conclusion` or `gh run watch`
+- [ ] Monitored GitHub Actions run via non-interactive `gh run view --json status,conclusion` loop (with 15s delays)
 - [ ] On failure (within 2 attempts): fetched failed logs via `gh run view --log-failed`
 - [ ] Fixed code based on failure logs
 - [ ] Verified local tests and checks pass
