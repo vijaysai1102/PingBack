@@ -7,7 +7,7 @@ description: Pre-push verification and automated GitHub Actions CI monitoring wi
 
 ## Overview
 
-Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all CI checks pass (capped at 3 remediation attempts).
+Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all CI checks pass (capped at 2 remediation attempts).
 
 ---
 
@@ -92,11 +92,11 @@ gh run watch <run-id>
 
 ## Phase 4: Auto-Remediation & Retry Loop
 
-When a remote CI check fails, follow this recovery process (capped at **max 3 remediation attempts**):
+When a remote CI check fails, follow this recovery process (capped at **max 2 remediation attempts**):
 
 ### Circuit Breaker Limit
 
-Maintain an attempt counter (`$attemptCount`). If `$attemptCount >= 3`, **STOP** the loop, surface the failure logs to the user, and ask for manual guidance to avoid infinite loops caused by flaky tests or remote infrastructure issues.
+Maintain an attempt counter (`$attemptCount`). If `$attemptCount >= 2`, **STOP** the loop, surface the failure logs to the user, and ask for manual guidance to avoid infinite loops caused by flaky tests or remote infrastructure issues.
 
 ### 1. Fetch & Inspect Failure Logs
 
@@ -163,7 +163,7 @@ git push
 - [ ] Ran local pre-push checks (`format:check`, `lint`, `typecheck`, `build`, `test`)
 - [ ] Pushed commit to GitHub
 - [ ] Monitored GitHub Actions run via non-interactive `gh run view --json status,conclusion` or `gh run watch`
-- [ ] On failure (within 3 attempts): fetched failed logs via `gh run view --log-failed`
+- [ ] On failure (within 2 attempts): fetched failed logs via `gh run view --log-failed`
 - [ ] Fixed code based on failure logs
 - [ ] Verified local tests and checks pass
 - [ ] Re-committed with descriptive message, re-pushed, and resumed CI watch loop until ALL green (or max attempts reached)
