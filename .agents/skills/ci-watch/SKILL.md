@@ -116,10 +116,22 @@ Identify:
 - Which environment failed (e.g., `windows-latest` vs `macos-latest`, Node version)
 - The exact error message, stack trace, or failed assertion
 
-### 2. Edit Code Based on Logs
+### 2. Root-Cause Analysis & Clean Code Remediation
 
-- Analyze the root cause from the logs.
-- Edit the codebase to fix the issue (e.g., path separator issues on Windows/macOS, missing dependencies, timing issues, or broken assertions).
+Before making any code edits:
+
+1. **Diagnose the Exact Root Cause**:
+   - Do **NOT** guess, suppress errors, or add quick hacky workarounds (e.g., `any`, `// @ts-ignore`, or silent `catch` blocks).
+   - Trace the exact file and line number that triggered the failure in the remote CI logs.
+   - Explicitly identify _why_ it failed (e.g., OS path separator mismatch `\` vs `/`, unhandled promise rejection, missing build dependency, or timing race condition).
+
+2. **Apply Clean Code & TDD Standards**:
+   - Write or update a local test first to reproduce the failure scenario whenever possible.
+   - Implement the fix following modular design standards: extract helper functions, validate inputs at boundaries, maintain immutability, and preserve cross-platform compatibility.
+   - Never write single-use test cleanup methods directly on production classes; put test helpers in test utility modules.
+
+3. **Verify Code Integrity**:
+   - Ensure the fix addresses the core logic error rather than hiding the symptom.
 
 ### 3. Verify Functionality & Local CI Checks
 
