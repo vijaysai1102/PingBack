@@ -7,7 +7,7 @@ description: Pre-push verification and automated GitHub Actions CI monitoring wi
 
 ## Overview
 
-Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all CI checks pass.
+Ensure that code is fully validated locally before pushing, and monitor remote GitHub Actions CI runs post-push. If any CI job fails on GitHub, automatically fetch logs, diagnose the failure, fix the code, re-verify locally, and re-push in a continuous loop until all CI checks pass (capped at 3 remediation attempts).
 
 ---
 
@@ -42,15 +42,20 @@ npm test
 
 Once local checks pass cleanly:
 
-1. Push your commit to GitHub:
+1. **Pre-flight authentication & status check**:
+   ```powershell
+   gh auth status
+   git status
+   ```
+2. **Push your commit to GitHub**:
    ```powershell
    git push
    ```
-2. Get the current commit SHA:
+3. **Get the current commit SHA**:
    ```powershell
    $commitSha = (git rev-parse HEAD).Trim()
    ```
-3. Locate the GitHub Actions workflow run for this commit using the GitHub CLI (`gh`):
+4. **Locate the GitHub Actions workflow run for this commit using the GitHub CLI (`gh`)**:
    ```powershell
    gh run list --commit $commitSha --limit 1
    ```
@@ -63,16 +68,19 @@ Monitor the remote CI workflow until completion using GitHub CLI.
 
 ### Polling / Watching the CI Run
 
-Watch the active run:
+For non-interactive agent environments, query status using JSON format to avoid UI terminal locks:
+
+```powershell
+# Query status and conclusion in JSON format
+$run = gh run view <run-id> --json status,conclusion | ConvertFrom-Json
+# $run.status -> "in_progress", "completed"
+# $run.conclusion -> "success", "failure", "cancelled"
+```
+
+Alternatively, watch the run directly if running interactively:
 
 ```powershell
 gh run watch <run-id>
-```
-
-Or check run status:
-
-```powershell
-gh run view <run-id>
 ```
 
 ### Evaluating CI Outcome
@@ -84,7 +92,11 @@ gh run view <run-id>
 
 ## Phase 4: Auto-Remediation & Retry Loop
 
-When a remote CI check fails, follow this 6-step recovery process:
+When a remote CI check fails, follow this recovery process (capped at **max 3 remediation attempts**):
+
+### Circuit Breaker Limit
+
+Maintain an attempt counter (`$attemptCount`). If `$attemptCount >= 3`, **STOP** the loop, surface the failure logs to the user, and ask for manual guidance to avoid infinite loops caused by flaky tests or remote infrastructure issues.
 
 ### 1. Fetch & Inspect Failure Logs
 
@@ -123,9 +135,11 @@ npm test
 
 ### 4. Stage & Commit the Fix
 
+Write descriptive commit messages referencing the specific failing check, or amend unpushed local work:
+
 ```powershell
 git add -A
-git commit -m "fix(ci): resolve CI failure in <job-name>"
+git commit -m "fix(ci): resolve <specific-issue> in <job-name> check"
 ```
 
 ### 5. Push Updated Code
@@ -136,19 +150,20 @@ git push
 
 ### 6. Redo GitHub CI Monitoring Loop
 
+- Increment attempt counter: `$attemptCount++`
 - Get the new commit SHA.
 - Obtain the new workflow run ID (`gh run list --commit <new-commit-sha>`).
-- Resume monitoring with `gh run watch <new-run-id>`.
-- Repeat Phase 4 until all CI checks pass cleanly.
+- Resume monitoring in Phase 3 until all CI checks pass cleanly or max attempts reached.
 
 ---
 
 ## Summary Checklist
 
+- [ ] Verified `gh auth status` and checked pre-flight git status
 - [ ] Ran local pre-push checks (`format:check`, `lint`, `typecheck`, `build`, `test`)
 - [ ] Pushed commit to GitHub
-- [ ] Monitored GitHub Actions run via `gh run watch <run-id>`
-- [ ] On failure: fetched failed logs via `gh run view --log-failed`
+- [ ] Monitored GitHub Actions run via non-interactive `gh run view --json status,conclusion` or `gh run watch`
+- [ ] On failure (within 3 attempts): fetched failed logs via `gh run view --log-failed`
 - [ ] Fixed code based on failure logs
 - [ ] Verified local tests and checks pass
-- [ ] Re-committed, re-pushed, and resumed CI watch loop until ALL green
+- [ ] Re-committed with descriptive message, re-pushed, and resumed CI watch loop until ALL green (or max attempts reached)
