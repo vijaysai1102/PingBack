@@ -94,5 +94,3 @@ CI: `.github/workflows/ci.yml` (Windows + macOS matrix). Release dry-run:
 
 Daemon binds to a local pipe/socket only (never `0.0.0.0`). Auth token on disk with
 restricted permissions. Session store holds id/cwd/pid/status — not chat content.
-
-
