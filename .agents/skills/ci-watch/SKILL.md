@@ -58,11 +58,16 @@ Once local checks pass cleanly:
    $commitSha = (git rev-parse HEAD).Trim()
    ```
 4. **Locate the GitHub Actions workflow run for this commit using the GitHub CLI (`gh`)**:
-   GitHub Actions may take 5–15 seconds to register a newly pushed commit. Filter by the workflow name (e.g., `"CI"`) and check that `$rawId` is not empty or `"null"` (since `jq` on an unregistered run outputs `"null"`, which PowerShell evaluates as truthy):
+   GitHub Actions may take 5–15 seconds to register a newly pushed commit. Filter by the workflow name (e.g., `"CI"`) or fallback to any workflow for the commit if the workflow name differs, and check that `$rawId` is not empty or `"null"` (since `jq` on an unregistered run outputs `"null"`, which PowerShell evaluates as truthy):
    ```powershell
    $runId = ""
    for ($i = 0; $i -lt 6; $i++) {
+       # 1. Try finding workflow named "CI"
        $rawId = (gh run list --workflow "CI" --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId 2>$null')
+       # 2. Fallback to any workflow for this commit if "CI" is not found
+       if (-not $rawId -or $rawId -eq "null") {
+           $rawId = (gh run list --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId 2>$null')
+       }
        if ($rawId -and $rawId -ne "null") {
            $runId = $rawId
            break
@@ -96,7 +101,7 @@ do {
 # $run.conclusion -> "success", "failure", "cancelled"
 ```
 
-> **Note**: Avoid interactive streaming commands like `gh run watch` in automated subagent or background sessions as they can lock up terminal standard input/output streams. When monitoring in an agent session, consider using non-blocking background tasks or scheduled checks to avoid holding synchronous turns.
+> **Note**: Avoid interactive streaming commands like `gh run watch` in automated subagent or background sessions as they can lock up terminal standard input/output streams. When monitoring in an agent session, avoid holding synchronous turns in a sleeping loop (`Start-Sleep`). Instead, run the polling loop in a non-blocking background command or use background timers (`schedule` tool) / subagents to check CI status asynchronously and yield control cleanly.
 
 ### Evaluating CI Outcome
 
