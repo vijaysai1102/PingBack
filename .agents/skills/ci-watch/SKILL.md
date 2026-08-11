@@ -62,7 +62,7 @@ $workflowName = "CI"
 $runId = ""
 
 for ($i = 0; $i -lt 8; $i++) {
-    $rawId = (gh run list --workflow $workflowName --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId 2>$null')
+    $rawId = (gh run list --workflow $workflowName --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId' 2>$null)
 
     if ($rawId -and $rawId -ne "null") {
         $runId = $rawId
