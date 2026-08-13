@@ -1,21 +1,37 @@
 ---
 name: ci-watch
-description: Verify PingBack locally before a GitHub push, then monitor its GitHub Actions CI run and guide an approved remediation loop.
+description: >-
+  Verify PingBack locally, then watch the GitHub Actions workflow named CI
+  after an approved push, using the bundled helper. Use when the user asks
+  to watch CI, check GitHub Actions, monitor a workflow run, fix a failing
+  CI job, or to push and wait for CI. Do not use for local-only commits or
+  when the user wants to push without waiting.
 ---
 
-# CI Watch & Assisted Remediation
+# CI Watch
 
-## Overview
+Execute the helper. Do not improvise PowerShell or `gh` polling loops, and do
+not use `gh run watch` (it opens a TUI). This skill watches the workflow named
+`CI` only — not `Release`.
 
-Run this workflow before pushing and after a push that can trigger PingBack's `CI` workflow. Keep all work local unless the user explicitly approves each push and each remediation.
+```bash
+node .agents/skills/ci-watch/scripts/ci-watch.mjs expect
+node .agents/skills/ci-watch/scripts/ci-watch.mjs find
+node .agents/skills/ci-watch/scripts/ci-watch.mjs watch
+node .agents/skills/ci-watch/scripts/ci-watch.mjs failed [run-id]
+```
+
+Stdout is one JSON object. Read `action` (and `run.url`). Stderr is progress.
+The helper never pushes, commits, or edits files.
 
 ---
 
 ## 1. Verify locally
 
-Run every check before any push. If one fails, do not push; fix it and rerun the full set.
+`npm test` needs generated sound assets, so run `build` before `test`. If one
+check fails, fix it and rerun the full set. Do not push red local checks.
 
-```powershell
+```bash
 npm run format:check
 npm run lint
 npm run typecheck
@@ -23,113 +39,63 @@ npm run build
 npm test
 ```
 
+This is `quality` + `test` on the current OS/Node only. It does not cover the
+OS × Node matrix or the `package` smoke job.
+
 ---
 
 ## 2. Approve and push
 
-Check authentication, working tree, and branch:
+Ask for the exact branch and commit before **every** push, including
+remediations. Call out `main`. Do not push unrelated dirty files.
 
-```powershell
-gh auth status
-git status
-$currentBranch = (git branch --show-current).Trim()
-```
-
-Before **every** push, obtain the user's explicit approval for the exact branch and commit(s). A prior approval does not cover a later remediation commit. Explicitly identify `main` or a protected release branch before requesting approval.
-
-```powershell
+```bash
 git push
-# If on a newly created branch without an upstream tracking branch:
 # git push -u origin HEAD
 ```
 
-## 3. Find the expected CI run
-
-PingBack's `CI` workflow runs for pushes to `main` and pull requests. A feature-branch push without an open PR creates no CI run; report that result and stop watching instead of reporting an error.
-
-```powershell
-$openPrNumber = (gh pr list --head $currentBranch --state open --json number --jq '.[0].number')
-
-if ($currentBranch -ne "main" -and (-not $openPrNumber -or $openPrNumber -eq "null")) {
-    Write-Output "No open pull request exists for '$currentBranch'. PingBack CI will not run for this branch push."
-    return
-}
-```
-
-```powershell
-$commitSha = (git rev-parse HEAD).Trim()
-$workflowName = "CI"
-$runId = ""
-
-for ($i = 0; $i -lt 8; $i++) {
-    $rawId = (gh run list --workflow $workflowName --commit $commitSha --limit 1 --json databaseId --jq '.[0].databaseId' 2>$null)
-
-    if ($rawId -and $rawId -ne "null") {
-        $runId = $rawId
-        break
-    }
-    # Bounded run-registration wait: at most 40 seconds total.
-    Start-Sleep -Seconds 5
-}
-
-if (-not $runId) {
-    Write-Error "Failed to locate GitHub Actions workflow '$workflowName' for commit $commitSha after 40 seconds. Report this to the user and request guidance."
-    return
-}
-```
+Then run `watch` (it will `find` if needed). If `action` is `push-first`, the
+push did not land.
 
 ---
 
-## 4. Monitor CI
+## 3. Watch until completion
 
-Make one non-interactive query per turn. Do not assume a scheduler exists or hold an unbounded synchronous sleep loop. If the run is queued or in progress, report that it remains pending and check again in a later turn.
+Run `watch` as **one** command. This matrix is often 8–15 minutes; the helper
+waits up to 20 minutes and follows cancelled successor runs (concurrency
+cancels superseded jobs on the same ref). Do not treat `queued` /
+`in_progress` as done. If you cannot block, background the same command and
+resume when it exits.
 
-```powershell
-$runInfo = gh run view $runId --json status,conclusion | ConvertFrom-Json
-```
-
-- `completed` + `success`: all `quality`, `test`, and `package` jobs passed; report success and stop.
-- `completed` + any other conclusion: continue to remediation.
-
----
-
-## 5. Diagnose and remediate (at most twice)
-
-Maintain `$attemptCount`. If it reaches `2`, stop, give the user the failed-log summary, and request guidance.
-
-Inspect only the useful failure context:
-
-```powershell
-gh run view $runId
-gh run view $runId --log-failed | Select-Object -First 200
-```
-
-Identify the failed job, operating system/Node version, and root cause. For OS-specific failures, check path separators, line endings, and shell-specific package scripts. Do not guess, suppress errors with `any` or `// @ts-ignore`, or add silent `try/catch` blocks. Fix the cause and add or update a reproducing unit test where practical.
-
-Propose the exact remediation and obtain user approval before editing. After approval, make the change and rerun every local check from step 1.
-
-Stage only reviewed files belonging to the fix—never `git add -A`, `git add .`, or `git add -u`:
-
-```powershell
-git add src/path/to/modified-file.ts tests/path/to/modified-test.ts
-```
-
-Show the files, commit message, and target branch; obtain fresh explicit approval before committing and pushing:
-
-```powershell
-git commit -m "fix(ci): resolve <specific-issue> in <job-name>"
-git push
-```
-
-Increment `$attemptCount`, get the new commit SHA, locate its CI run with step 3, and resume step 4.
+| `action`         | What to do                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| `no-ci`          | Feature branch with no PR. Tell the user; offer to open a PR; do not open one unless asked. |
+| `push-first`     | HEAD is not on origin. Push first.                                                          |
+| `not-found`      | Expected a run and none appeared. Ask. Do not keep polling.                                 |
+| `report-success` | `quality`, `test`, and `package` passed. Stop.                                              |
+| `diagnose`       | Step 4. Failed-job tails are already in `failures`.                                         |
+| `cancelled`      | No successor to follow. Ask. Not a product bug by itself.                                   |
+| `ask-user`       | Timeout, startup failure, or unknown. Do not guess a product fix.                           |
 
 ---
 
-## Quick checklist
+## 4. Remediate (at most two approved pushes)
 
-- Local checks passed before each push.
-- User approved each push and each remediation edit.
-- CI was expected for the branch before looking up a run.
-- CI was checked one query at a time.
-- Remediation was diagnosed from targeted logs, re-verified locally, and explicitly staged.
-- No more than two remediation attempts were made.
+Read [diagnose.md](diagnose.md). Count approved remediation pushes in this
+conversation — not a shell variable. After two, stop and ask.
+
+Propose the fix and wait. After approval: change the code, rerun step 1, stage
+**explicit paths** (never `git add -A` / `.` / `-u`), get a **fresh** push
+approval, then `watch` again.
+
+If the fix is a behavior change, follow `test-driven-development` (reproducing
+test first). Do not suppress errors with `any`, `@ts-ignore`, or silent
+`try/catch`.
+
+---
+
+## Mid-flow
+
+- Local verify only → stop after step 1.
+- Already pushed / "watch CI" → `watch`.
+- Known failed run → `failed <run-id>`.

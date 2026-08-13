@@ -25,7 +25,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/**/*.mjs', 'eslint.config.js', 'prettier.config.js'],
+    files: [
+      'scripts/**/*.mjs',
+      '.agents/**/*.mjs',
+      'eslint.config.js',
+      'prettier.config.js',
+    ],
     ...tseslint.configs.disableTypeChecked,
   },
 );
