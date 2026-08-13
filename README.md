@@ -302,4 +302,4 @@ The adapter interface exists so other agents can be added without touching the c
 
 ## License
 
-MIT
+[MIT](LICENSE) © Vijay Sai Chigullapally
