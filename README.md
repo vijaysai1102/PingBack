@@ -24,7 +24,7 @@ Requires Node.js 20 or newer.
 npm install -g pingback-cli
 ```
 
-The package is published as `pingback-cli` because `pingback` was already taken on npm by an unrelated project. The command you run is still `pingback`.
+The package is [`pingback-cli`](https://www.npmjs.com/package/pingback-cli) on npm (`pingback` was already taken). The command you run is still `pingback`. Tagged builds are also on [GitHub Releases](https://github.com/vijaysai1102/PingBack/releases).
 
 ## Setup
 
@@ -265,7 +265,7 @@ The package smoke job exists because the failures that hurt most are the ones un
 
 Two constraints shape the workflow. The build must run before the tests, because the sound assets are generated rather than committed. And every job runs on Windows or macOS — never Linux — because `package.json` declares `os: ["win32", "darwin"]`, which makes `npm ci` fail outright on a Linux runner.
 
-`.github/workflows/release.yml` runs on a `v*` tag. It repeats the full gate on both platforms, checks that the tag matches the version in `package.json`, runs `npm publish --dry-run`, verifies the tarball contains the CLI, daemon, hook entry point, and sounds while containing no tests, and uploads the tarball as a build artifact. It deliberately stops short of publishing; the publish job is present but commented out, along with the steps to enable it.
+`.github/workflows/release.yml` runs on a `v*` tag. It repeats the full gate on both platforms, checks that the tag matches the version in `package.json`, runs `npm publish --dry-run`, verifies the tarball contains the CLI, daemon, hook entry point, and sounds while containing no tests, and uploads the tarball as a build artifact. `pingback-cli` is published on npm from the tagged release; the workflow's own publish job is still commented out pending an `NPM_TOKEN` repository secret.
 
 ## Architecture
 
