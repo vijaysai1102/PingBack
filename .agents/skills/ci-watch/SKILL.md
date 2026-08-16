@@ -2,10 +2,9 @@
 name: ci-watch
 description: >-
   Verify PingBack locally, then watch the GitHub Actions workflow named CI
-  after an approved push, using the bundled helper. Use when the user asks
-  to watch CI, check GitHub Actions, monitor a workflow run, fix a failing
-  CI job, or to push and wait for CI. Do not use for local-only commits or
-  when the user wants to push without waiting.
+  after an approved push, using the bundled helper. ONLY activate when the user
+  explicitly requests to watch CI, check GitHub Actions, run "/ci-watch", or
+  monitor a workflow run. Do NOT invoke automatically or autonomously.
 ---
 
 # CI Watch
