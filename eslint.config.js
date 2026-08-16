@@ -28,6 +28,7 @@ export default tseslint.config(
     files: [
       'scripts/**/*.mjs',
       '.agents/**/*.mjs',
+      '.claude/**/*.mjs',
       'eslint.config.js',
       'prettier.config.js',
     ],
