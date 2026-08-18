@@ -6,3 +6,4 @@ assets/sounds/*.wav
 *.tgz
 .DS_Store
 .eslintcache
+img/
