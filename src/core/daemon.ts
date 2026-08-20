@@ -2,14 +2,13 @@ import type { Platform } from '../platform/platform.js';
 import type { PingBackConfig } from '../config/config-manager.js';
 import type { Logger } from '../utils/logger.js';
 import type { NotificationService } from '../notifications/notification-service.js';
-import { NotificationScheduler } from '../notifications/notification-scheduler.js';
+import { buildNotification } from '../notifications/notification-policy.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { DaemonState } from './daemon-state.js';
 import { EventRouter } from './event-router.js';
 import { parseAgentEvent, parseSessionUpdate } from './event-schema.js';
-import type { AgentAdapter } from '../agents/adapter.js';
 import { IpcServer } from './ipc/server.js';
-import type { AgentStatusInfo, DaemonStatus, IpcRequest } from './ipc/protocol.js';
+import type { DaemonStatus, IpcRequest } from './ipc/protocol.js';
 
 export interface DaemonOptions {
   platform: Platform;
@@ -19,8 +18,7 @@ export interface DaemonOptions {
   state: DaemonState;
   logger: Logger;
   version: string;
-  adapters?: AgentAdapter[] | undefined;
-  /** Reports whether the Claude integration is currently installed (legacy). */
+  /** Reports whether the Claude integration is currently installed. */
   claudeConnected?: () => boolean;
   pruneIntervalMs?: number;
   now?: () => number;
@@ -41,7 +39,6 @@ export interface EventAck {
 export class Daemon {
   readonly #options: DaemonOptions;
   readonly #router: EventRouter;
-  readonly #scheduler: NotificationScheduler;
   readonly #logger: Logger;
   readonly #now: () => number;
 
@@ -56,11 +53,6 @@ export class Daemon {
     this.#logger = options.logger;
     this.#now = options.now ?? (() => Date.now());
     this.#router = new EventRouter({ sessions: options.sessions, now: this.#now });
-    this.#scheduler = new NotificationScheduler({
-      notifications: options.notifications,
-      getConfig: () => this.#options.config,
-      logger: this.#logger,
-    });
   }
 
   get startedAt(): number {
@@ -123,7 +115,6 @@ export class Daemon {
       this.#pruneTimer = undefined;
     }
 
-    this.#scheduler.dispose();
     await this.#server?.close();
     this.#server = undefined;
     this.#options.state.clearRecord();
@@ -155,32 +146,13 @@ export class Daemon {
   }
 
   status(): DaemonStatus {
-    const { platform, version, claudeConnected, adapters } = this.#options;
-    const agentStatuses: AgentStatusInfo[] | undefined =
-      adapters !== undefined
-        ? adapters.map((adapter) => {
-            const detection = adapter.detect();
-            return {
-              name: adapter.name,
-              displayName: adapter.displayName,
-              configured: adapter.isConfigured(),
-              installed: detection.installed,
-            };
-          })
-        : undefined;
-
-    const legacyClaude =
-      claudeConnected?.() ??
-      agentStatuses?.find((a) => a.name === 'claude')?.configured ??
-      false;
-
+    const { platform, version, claudeConnected } = this.#options;
     return {
       pid: process.pid,
       version,
       startedAt: this.#startedAt,
       platform: platform.id,
-      claudeConnected: legacyClaude,
-      agents: agentStatuses,
+      claudeConnected: claudeConnected?.() ?? false,
       sessions: this.#options.sessions.list(),
     };
   }
@@ -190,14 +162,9 @@ export class Daemon {
     const update = parseSessionUpdate(payload);
 
     this.#options.sessions.touch(update.sessionId, update.status, {
-      agent: update.agent,
       cwd: update.cwd,
       pid: update.pid,
     });
-
-    if (update.status === 'working' || update.status === 'completed') {
-      this.#scheduler.cancel(update.sessionId, update.agent);
-    }
 
     this.#logger.debug('session updated', {
       sessionId: update.sessionId,
@@ -226,7 +193,27 @@ export class Daemon {
       priority: outcome.routed.priority,
     });
 
-    const notified = await this.#scheduler.schedule(outcome.routed);
+    const notified = await this.#notify(outcome.routed);
     return { accepted: true, duplicate: false, notified };
+  }
+
+  async #notify(routed: Parameters<typeof buildNotification>[0]): Promise<boolean> {
+    const request = buildNotification(routed, this.#options.config.notifications);
+    if (request === undefined) return false;
+
+    if (!this.#options.notifications.isAvailable()) {
+      this.#logger.warn('notification skipped', { reason: 'unavailable' });
+      return false;
+    }
+
+    try {
+      await this.#options.notifications.notify(request);
+      this.#logger.debug('notification delivered', { priority: request.priority });
+      return true;
+    } catch (error) {
+      // Session tracking must survive a notification backend failure.
+      this.#logger.error('notification failed', { err: error });
+      return false;
+    }
   }
 }

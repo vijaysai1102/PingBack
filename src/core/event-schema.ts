@@ -1,26 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PingBackError } from '../utils/errors.js';
-import {
-  isAgentEventType,
-  type AgentEvent,
-  type AgentType,
-  type SessionStatus,
-} from './types.js';
-
-export const SUPPORTED_AGENTS: readonly AgentType[] = ['claude', 'codex'];
-
-export function isAgentType(value: unknown): value is AgentType {
-  return typeof value === 'string' && SUPPORTED_AGENTS.includes(value as AgentType);
-}
-
-function defaultTitleForAgent(agent: AgentType): string {
-  switch (agent) {
-    case 'claude':
-      return 'Claude Code';
-    case 'codex':
-      return 'Codex CLI';
-  }
-}
+import { isAgentEventType, type AgentEvent, type SessionStatus } from './types.js';
 
 /** Hard caps so a malformed or hostile payload cannot blow up memory or a toast. */
 const MAX_TITLE_LENGTH = 120;
@@ -69,10 +49,10 @@ export function parseAgentEvent(raw: unknown, now: () => number = Date.now): Age
 
   const record = raw as Record<string, unknown>;
 
-  if (!isAgentType(record.agent)) {
+  if (record.agent !== 'claude') {
     throw new PingBackError(`Unsupported agent: ${String(record.agent)}`, {
       code: 'INVALID_EVENT',
-      hint: 'PingBack supports "claude" and "codex" agents.',
+      hint: 'PingBack v0.1 supports the "claude" agent only.',
     });
   }
 
@@ -96,10 +76,10 @@ export function parseAgentEvent(raw: unknown, now: () => number = Date.now): Age
 
   return {
     id: optionalString(record.id) ?? randomUUID(),
-    agent: record.agent,
+    agent: 'claude',
     sessionId,
     type: record.type,
-    title: clamp(title ?? defaultTitleForAgent(record.agent), MAX_TITLE_LENGTH),
+    title: clamp(title ?? 'Claude Code', MAX_TITLE_LENGTH),
     message: clamp(message ?? '', MAX_MESSAGE_LENGTH),
     cwd: optionalString(record.cwd),
     pid: optionalPid(record.pid),
@@ -109,13 +89,12 @@ export function parseAgentEvent(raw: unknown, now: () => number = Date.now): Age
 }
 
 /**
- * A session state change that carries no notification, such as an agent starting
+ * A session state change that carries no notification, such as Claude starting
  * work again after the developer answered a prompt.
  */
 export interface SessionUpdate {
   sessionId: string;
   status: SessionStatus;
-  agent?: AgentType | undefined;
   cwd?: string | undefined;
   pid?: number | undefined;
 }
@@ -150,12 +129,9 @@ export function parseSessionUpdate(raw: unknown): SessionUpdate {
     });
   }
 
-  const agent = isAgentType(record.agent) ? record.agent : undefined;
-
   return {
     sessionId,
     status: record.status as SessionStatus,
-    agent,
     cwd: optionalString(record.cwd),
     pid: optionalPid(record.pid),
   };

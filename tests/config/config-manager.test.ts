@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ConfigManager,
   DEFAULT_CONFIG,
-  DEFAULT_EVENT_CONFIGS,
   getConfigValue,
   isConfigKey,
   normalizeConfig,
@@ -24,69 +23,25 @@ afterEach(() => {
 });
 
 function defaults(): PingBackConfig {
-  return {
-    notifications: {
-      desktop: true,
-      sound: true,
-      volume: 1.0,
-      events: {
-        attention_required: { ...DEFAULT_EVENT_CONFIGS.attention_required },
-        question: { ...DEFAULT_EVENT_CONFIGS.question },
-        error: { ...DEFAULT_EVENT_CONFIGS.error },
-        task_completed: { ...DEFAULT_EVENT_CONFIGS.task_completed },
-      },
-    },
-    logLevel: 'info',
-  };
+  return { notifications: { desktop: true, sound: true }, logLevel: 'info' };
 }
 
 describe('DEFAULT_CONFIG', () => {
-  it('alerts immediately for attention, questions, and errors while keeping completions silent', () => {
+  it('enables desktop notifications and sound', () => {
     expect(DEFAULT_CONFIG.notifications.desktop).toBe(true);
     expect(DEFAULT_CONFIG.notifications.sound).toBe(true);
-    expect(DEFAULT_CONFIG.notifications.volume).toBe(1.0);
-    expect(DEFAULT_CONFIG.notifications.events.attention_required).toEqual({
-      delaySeconds: 0,
-      sound: true,
-      desktop: true,
-    });
-    expect(DEFAULT_CONFIG.notifications.events.question).toEqual({
-      delaySeconds: 0,
-      sound: true,
-      desktop: true,
-    });
-    expect(DEFAULT_CONFIG.notifications.events.error).toEqual({
-      delaySeconds: 0,
-      sound: true,
-      desktop: true,
-    });
-    expect(DEFAULT_CONFIG.notifications.events.task_completed).toEqual({
-      delaySeconds: 0,
-      sound: false,
-      desktop: true,
-    });
   });
 });
 
 describe('normalizeConfig', () => {
   it('accepts a valid config with no warnings', () => {
     const result = normalizeConfig({
-      notifications: {
-        desktop: false,
-        sound: true,
-        volume: 0.8,
-        events: {
-          question: { delaySeconds: 2, sound: false, desktop: true },
-        },
-      },
+      notifications: { desktop: false, sound: true },
       logLevel: 'debug',
     });
 
     expect(result.warnings).toEqual([]);
     expect(result.config.notifications.desktop).toBe(false);
-    expect(result.config.notifications.volume).toBe(0.8);
-    expect(result.config.notifications.events.question.delaySeconds).toBe(2);
-    expect(result.config.notifications.events.question.sound).toBe(false);
     expect(result.config.logLevel).toBe('debug');
   });
 
@@ -95,8 +50,6 @@ describe('normalizeConfig', () => {
 
     expect(result.config.notifications.desktop).toBe(true);
     expect(result.config.notifications.sound).toBe(false);
-    expect(result.config.notifications.volume).toBe(1.0);
-    expect(result.config.notifications.events.question.delaySeconds).toBe(0);
     expect(result.config.logLevel).toBe('info');
   });
 
@@ -112,13 +65,6 @@ describe('normalizeConfig', () => {
 
     expect(result.config.notifications.desktop).toBe(true);
     expect(result.warnings[0]).toContain('notifications.desktop');
-  });
-
-  it('warns for invalid volume values', () => {
-    const result = normalizeConfig({ notifications: { volume: 2.5 } });
-
-    expect(result.config.notifications.volume).toBe(1.0);
-    expect(result.warnings[0]).toContain('notifications.volume');
   });
 
   it('warns for an invalid log level', () => {
@@ -145,20 +91,11 @@ describe('ConfigManager', () => {
 
   it('round-trips a saved config', () => {
     const manager = new ConfigManager(dir);
-    manager.save({
-      notifications: {
-        desktop: false,
-        sound: false,
-        volume: 0.5,
-        events: { ...DEFAULT_EVENT_CONFIGS },
-      },
-      logLevel: 'warn',
-    });
+    manager.save({ notifications: { desktop: false, sound: false }, logLevel: 'warn' });
 
     const result = manager.load();
     expect(result.source).toBe('file');
     expect(result.config.notifications.desktop).toBe(false);
-    expect(result.config.notifications.volume).toBe(0.5);
     expect(result.config.logLevel).toBe('warn');
   });
 
@@ -196,8 +133,6 @@ describe('config keys', () => {
   it('recognizes the supported keys', () => {
     expect(isConfigKey('notifications.desktop')).toBe(true);
     expect(isConfigKey('notifications.sound')).toBe(true);
-    expect(isConfigKey('notifications.volume')).toBe(true);
-    expect(isConfigKey('notifications.events.question.delaySeconds')).toBe(true);
     expect(isConfigKey('logLevel')).toBe(true);
     expect(isConfigKey('nope')).toBe(false);
   });
@@ -205,32 +140,17 @@ describe('config keys', () => {
   it('reads values by key', () => {
     const config = defaults();
     expect(getConfigValue(config, 'notifications.desktop')).toBe(true);
-    expect(getConfigValue(config, 'notifications.volume')).toBe(1.0);
-    expect(getConfigValue(config, 'notifications.events.question.delaySeconds')).toBe(0);
     expect(getConfigValue(config, 'logLevel')).toBe('info');
   });
 
-  it('sets boolean and numeric values from strings', () => {
+  it('sets boolean values from strings', () => {
     const config = defaults();
 
     expect(setConfigValue(config, 'notifications.sound', 'false')).toEqual({ ok: true });
     expect(config.notifications.sound).toBe(false);
 
-    expect(setConfigValue(config, 'notifications.volume', '0.75')).toEqual({ ok: true });
-    expect(config.notifications.volume).toBe(0.75);
-
-    expect(
-      setConfigValue(config, 'notifications.events.question.delaySeconds', '10'),
-    ).toEqual({ ok: true });
-    expect(config.notifications.events.question.delaySeconds).toBe(10);
-  });
-
-  it('rejects an invalid volume value', () => {
-    const config = defaults();
-    const result = setConfigValue(config, 'notifications.volume', '1.5');
-
-    expect(result.ok).toBe(false);
-    expect(config.notifications.volume).toBe(1.0);
+    expect(setConfigValue(config, 'notifications.desktop', 'TRUE')).toEqual({ ok: true });
+    expect(config.notifications.desktop).toBe(true);
   });
 
   it('rejects a non-boolean value', () => {

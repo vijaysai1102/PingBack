@@ -135,37 +135,11 @@ export function normalizeHookPayload(
       );
     }
 
-    case 'Stop': {
-      const error = str(payload.error) ?? str(payload.error_details);
-      const detail = str(payload.last_assistant_message) ?? str(payload.message);
-
-      if (error !== undefined) {
-        return buildEvent(
-          'error',
-          payload,
-          sessionId,
-          timestamp,
-          detail ?? `Claude stopped: ${error}.`,
-          { hookEvent, error },
-        );
-      }
-
-      return buildEvent('attention_required', payload, sessionId, timestamp, detail, {
-        hookEvent,
-      });
-    }
-
     case 'SessionStart':
     case 'UserPromptSubmit':
-      return {
-        kind: 'session',
-        update: { sessionId, status: 'working', cwd, agent: 'claude' },
-      };
+      return { kind: 'session', update: { sessionId, status: 'working', cwd } };
 
     case 'SessionEnd':
-      return {
-        kind: 'session',
-        update: { sessionId, status: 'completed', cwd, agent: 'claude' },
-      };
+      return { kind: 'session', update: { sessionId, status: 'completed', cwd } };
   }
 }

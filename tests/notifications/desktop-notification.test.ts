@@ -105,7 +105,6 @@ describe('DesktopNotificationService', () => {
       message: 'Claude is waiting for permission.\nProject: finbot',
       appName: APP_NAME,
     });
-    expect(calls[0]).not.toHaveProperty('actions');
   });
 
   it('disables the toast sound so PingBack controls the tone', async () => {

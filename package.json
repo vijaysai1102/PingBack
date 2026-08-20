@@ -1,7 +1,7 @@
 {
   "name": "pingback-cli",
-  "version": "0.2.0",
-  "description": "Never miss when your AI coding agent needs you. Local desktop notifications for Claude Code and Codex CLI.",
+  "version": "0.1.0",
+  "description": "Never miss when your AI coding agent needs you. Local desktop notifications when Claude Code needs your attention.",
   "keywords": [
     "claude-code",
     "notifications",
@@ -36,7 +36,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && node scripts/generate-sounds.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/generate-sounds.mjs && tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "test": "vitest run",
     "test:watch": "vitest",

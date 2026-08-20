@@ -9,7 +9,6 @@
 /** Hook events PingBack subscribes to. */
 export const CLAUDE_HOOK_EVENTS = [
   'Notification',
-  'Stop',
   'StopFailure',
   'SessionStart',
   'UserPromptSubmit',

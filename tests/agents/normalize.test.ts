@@ -166,45 +166,6 @@ describe('normalizeHookPayload: StopFailure', () => {
   });
 });
 
-describe('normalizeHookPayload: Stop', () => {
-  it('builds an attention event on normal stop', () => {
-    const result = normalizeHookPayload(
-      {
-        session_id: 'abc123',
-        cwd: '/Users/dev/finbot',
-        hook_event_name: 'Stop',
-        last_assistant_message: 'Finished running task.',
-      },
-      now,
-    );
-
-    if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event).toMatchObject({
-      agent: 'claude',
-      sessionId: 'abc123',
-      type: 'attention_required',
-      title: 'Claude Code needs your attention',
-      message: 'Finished running task.',
-      cwd: '/Users/dev/finbot',
-    });
-  });
-
-  it('builds an error event when Stop carries error details', () => {
-    const result = normalizeHookPayload(
-      {
-        session_id: 'abc123',
-        cwd: '/Users/dev/finbot',
-        hook_event_name: 'Stop',
-        error: 'aborted',
-      },
-      now,
-    );
-
-    if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event.type).toBe('error');
-  });
-});
-
 describe('normalizeHookPayload: session state', () => {
   it('marks the session working on SessionStart', () => {
     const result = normalizeHookPayload(
@@ -214,12 +175,7 @@ describe('normalizeHookPayload: session state', () => {
 
     expect(result).toEqual({
       kind: 'session',
-      update: {
-        sessionId: 'abc',
-        status: 'working',
-        cwd: '/proj',
-        agent: 'claude',
-      },
+      update: { sessionId: 'abc', status: 'working', cwd: '/proj' },
     });
   });
 

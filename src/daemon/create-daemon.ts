@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { createAllAdapters } from '../agents/registry.js';
+import { ClaudeAdapter } from '../agents/claude/adapter.js';
 import { ConfigManager } from '../config/config-manager.js';
 import { Daemon } from '../core/daemon.js';
 import { DaemonState } from '../core/daemon-state.js';
@@ -49,8 +49,6 @@ export function createDaemon(): CreateDaemonResult {
       })
     : new NullNotificationService();
 
-  const adapters = createAllAdapters();
-
   const daemon = new Daemon({
     platform,
     config,
@@ -59,9 +57,7 @@ export function createDaemon(): CreateDaemonResult {
     state: new DaemonState(platform.paths.dataDir),
     logger,
     version: packageVersion(),
-    adapters,
-    claudeConnected: () =>
-      adapters.find((a) => a.name === 'claude')?.isConfigured() ?? false,
+    claudeConnected: () => new ClaudeAdapter().isConfigured(),
   });
 
   return { daemon, logger, platform };
