@@ -3,94 +3,106 @@
 Never miss when your AI coding agent needs you.
 
 PingBack is a **local agent attention layer**: a background daemon that detects when
-Claude Code needs the developer and raises a desktop notification + optional sound.
+an AI coding agent (like Claude Code) needs the developer and raises a desktop notification + optional sound.
 
-Published as `pingback-cli` on npm (`pingback` was taken). The CLI command is still
-`pingback`. Repo: https://github.com/vijaysai1102/PingBack
+Published as `pingback-cli` on npm (`pingback` was taken). The CLI command is `pingback`.
+Repo: https://github.com/vijaysai1102/PingBack
 
-## Status (v0.1)
+## Project Status & Versioning
 
-v0.1 is **implemented and CI-green** on Windows + macOS. Do not rebuild from the
-milestone list unless fixing a real gap. Prefer reading existing code over rewriting.
+- **v0.1**: Completed and CI-green (Windows + macOS baseline with Claude Code adapter, daemon, desktop toasts + sound, session tracking, and CLI).
+- **v0.2, v0.3, ...**: Active development proceeds through iterative version milestones.
 
-Full original engineering spec (milestones, event model, CLI UX, DoD, etc.):
+## Version Milestone Workflow & Logging Protocol
 
-See [`docs/SPEC.md`](docs/SPEC.md) — open only when you need detail, not every session.
+- **Mandatory Version File Creation**: Whenever the developer mentions, asks for, or begins working on a new version (e.g. `v0.2`, `v0.3`, etc.), the agent **must immediately create or open a dedicated version file** named `<version_name>.md` under `docs/versions/` (e.g. `docs/versions/v0.2.md`).
+- **Structured Specification from `SPEC.md`**: Read the developer's prompt/spec from `SPEC.md` (or chat) and structure `docs/versions/<version_name>.md` as follows:
+  1. **Goals & Summary**: Core purpose and milestone description.
+  2. **Scope & Requirements**: Bulleted list of all functional requirements and acceptance criteria from `SPEC.md`.
+  3. **Technical Plan**: Affected modules, new components, and design decisions.
+  4. **Continuous Work Log**: Live, running log of actions taken, files modified/created, decisions made, and test verification results.
+- **Continuous Work Logging**: As code is implemented, keep the work log updated throughout the version until completion.
+- **Preserve Invariants**: Every new version must preserve the core architecture, test coverage, and product rules.
 
-## Product rules
+## Product Rules & Invariants
 
-- Local only: no accounts, cloud, telemetry, or network control plane.
-- Invisible when idle; notify only when attention is required.
-- Zero-config for the normal path: `npm install -g pingback-cli` → `pingback setup`.
-- Adapter architecture: Claude-specific code stays under `src/agents/claude/`. Core
-  must not hard-code Claude behavior.
-- Platform code behind interfaces (`src/platform/`), not scattered `process.platform`
-  checks.
-- Do **not** invent Claude hooks/APIs — research official docs or verify on the
-  installed CLI first.
+- **Local only**: No accounts, cloud backend, telemetry, or network control plane.
+- **Invisible when idle**: Notify only when developer attention is actually required.
+- **Zero-config default**: `npm install -g pingback-cli` → `pingback setup`.
+- **Adapter architecture**: Agent-specific code stays under `src/agents/<agent>/`. Core must never hard-code agent-specific behaviors.
+- **Platform abstraction**: Platform-specific logic stays behind interfaces in `src/platform/`, not scattered `process.platform` checks.
+- **Official integrations**: Do not guess or scrape terminal output when official hooks or APIs are available.
 
-## v0.1 scope (supported)
+## Platform & Runtime Support
 
-Windows · macOS · Claude Code · TypeScript/Node ≥20 · local daemon · desktop
-notifications · sounds · session tracking · CLI (`setup` / `start` / `stop` /
-`status` / `config` / `uninstall`)
+- Platforms: Windows (`win32`) & macOS (`darwin`)
+- Runtime: Node.js >= 20 (CI-tested on Node 20, 22, and 24), TypeScript (ESM)
+- Distribution: npm global package (`pingback-cli`)
 
-## Out of scope (do not build)
-
-Codex · AGY · Cursor · Copilot · Gemini · Linux · mobile · browser extension · web
-dashboard · cloud sync · remote/phone notifications · accounts · payments · telemetry
-· team features · heavy GUI · plugin marketplace
-
-Architecture should allow other agents later via new adapters, not core rewrites.
-
-## Layout
+## Architecture & Layout
 
 ```text
-src/core/           events, routing, IPC, daemon
-src/agents/         adapter API + Claude Code integration
-src/sessions/       session tracking + JSON persistence
-src/notifications/  desktop toasts + sound
-src/platform/       windows/ + macos/
-src/config/         settings
-src/cli/            commander CLI
-docs/SPEC.md        full v0.1 engineering specification
+src/core/           events, routing, IPC, daemon lifecycle
+src/agents/         adapter API + agent integrations (e.g. claude)
+src/sessions/       session tracking + local JSON persistence
+src/notifications/  desktop toasts + audio feedback
+src/platform/       windows/ and macos/ platform implementations
+src/config/         user settings and file paths
+src/cli/            CLI commands (commander)
+docs/versions/      milestone specs and work logs (v0.1.md, v0.2.md, ...)
 ```
 
-## How it works (short)
+### Key Entry Points
+- CLI Entry: `src/cli/index.ts`
+- Daemon Process: `src/daemon/main.ts` & `src/core/daemon.ts`
+- Claude Adapter & Hooks: `src/agents/claude/`
+- Platform Bridges (Toast/Audio): `src/platform/`
+- Session Tracking: `src/sessions/`
+- Notification Policy: `src/notifications/notification-policy.ts`
 
-Claude Code hooks → `hook-entry` → local IPC (named pipe / Unix socket, token auth) →
-daemon → normalize event → update session → notify (priority → sound).
+## How It Works
 
-Hooks used: `Notification`, `StopFailure`, `SessionStart`, `UserPromptSubmit`,
-`SessionEnd`. Prefer official hooks over scraping terminal output.
+1. Agent hooks (e.g. Claude Code hooks) → `hook-entry` binary.
+2. `hook-entry` sends payload over local IPC (named pipe on Windows / Unix socket on macOS, authenticated with local token) to background daemon.
+3. Daemon normalizes events, updates session store, and determines notification priority.
+4. Daemon dispatches desktop toast notification and/or sound.
 
-## Commands agents should know
+## Event & Attention Model
+
+- **High Attention** (Notification / StopFailure / Input needed): Triggers desktop toast + audio feedback.
+- **Session Tracking** (SessionStart / UserPromptSubmit / SessionEnd): Updates session state in `session-store.ts` without triggering sound.
+
+## Commands Agents Should Know
 
 ```bash
-npm install          # also runs prepare (build tooling)
-npm run build
-npm test
-npm run lint
-npm run typecheck
-npm run format:check
+npm install          # install dependencies and prepare build tooling
+npm run build        # compile TypeScript to dist/
+npm test             # run unit and integration tests (vitest)
+npm run test:watch   # vitest in watch mode
+npm run lint         # run eslint checks
+npm run lint:fix     # run eslint and auto-fix
+npm run typecheck    # verify TypeScript types
+npm run format:check # check code formatting (prettier)
+npm run format       # format code with prettier
 
-pingback setup|start|stop|status|config
+# CLI commands
+pingback setup|start|stop|status|config|uninstall
 ```
 
-CI: `.github/workflows/ci.yml` (Windows + macOS matrix). Release dry-run:
-`.github/workflows/release.yml` (no npm publish until enabled).
+CI: `.github/workflows/ci.yml` (Windows + macOS across Node 20, 22, and 24).
 
-## Engineering habits
+## Engineering Standards
 
-1. Inspect the repo and existing patterns before adding code.
-2. Prefer the simplest cross-platform option; minimize dependencies.
-3. Fail gracefully for user errors; stack traces only via debug/logging.
+1. Inspect the repo and existing patterns before adding or refactoring code.
+2. Prefer simple, cross-platform implementations; minimize external dependencies.
+3. Fail gracefully for user errors; keep stack traces behind debug logs.
 4. Never log conversations, prompts, or large terminal dumps.
-5. Tests are mandatory for core/router/sessions/adapter/notifications/config.
-6. Do not claim support for features that are not implemented.
-7. Keep this file short. Put lasting detail in `docs/SPEC.md` or the README — not here.
+5. Tests are mandatory for core, router, sessions, adapters, notifications, and config.
+6. Use Conventional Commits: `feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:`.
+7. Keep this file lean and evergreen.
 
-## Privacy / security
+## Privacy & Security
 
-Daemon binds to a local pipe/socket only (never `0.0.0.0`). Auth token on disk with
-restricted permissions. Session store holds id/cwd/pid/status — not chat content.
+- Local daemon binds only to local IPC (named pipe / Unix domain socket), never `0.0.0.0` or public network ports.
+- Auth token is stored on disk with restricted permissions.
+- Session store holds session metadata (`id`, `cwd`, `pid`, `status`), never conversation or prompt text.
