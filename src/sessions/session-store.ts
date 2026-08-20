@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentSession, AgentType, SessionStatus } from '../core/types.js';
+import { type AgentSession, type AgentType, type SessionStatus } from '../core/types.js';
 import { readJsonFile, writeJsonFileAtomic } from '../utils/json-file.js';
 
 export interface SessionStore {
@@ -51,7 +51,6 @@ export function parseSession(raw: unknown): AgentSession | undefined {
     !Array.isArray(record.metadata)
       ? (record.metadata as Record<string, unknown>)
       : undefined;
-
   return {
     id,
     agent: record.agent as AgentType,

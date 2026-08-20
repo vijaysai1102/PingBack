@@ -105,6 +105,7 @@ describe('DesktopNotificationService', () => {
       message: 'Claude is waiting for permission.\nProject: finbot',
       appName: APP_NAME,
     });
+    expect(calls[0]).not.toHaveProperty('actions');
   });
 
   it('disables the toast sound so PingBack controls the tone', async () => {
@@ -117,36 +118,6 @@ describe('DesktopNotificationService', () => {
 
     await service.notify(request());
     expect(calls[0]?.sound).toBe(false);
-  });
-
-  it.each([
-    ['Return to Codex', 'a macOS action-button response'],
-    ['return to codex', 'a Windows-normalized action-button response'],
-    ['activate', 'a toast-body click response'],
-  ])('runs the return action for %s from %s', async (response) => {
-    const calls: Record<string, unknown>[] = [];
-    const onActivate = vi.fn(() => Promise.resolve({ handled: true }));
-    const notifier: NotifierLike = {
-      notify(options, callback) {
-        calls.push(options);
-        callback(null, response);
-        return undefined;
-      },
-    };
-    const service = new DesktopNotificationService({
-      sound: new RecordingSound(),
-      notifier,
-      available: true,
-    });
-    const notification = {
-      ...request(),
-      action: { label: 'Return to Codex', onActivate },
-    } as NotificationRequest;
-
-    await service.notify(notification);
-
-    expect(calls[0]?.actions).toEqual(['Return to Codex']);
-    expect(onActivate).toHaveBeenCalledTimes(1);
   });
 
   it('plays the attention sound for high priority', async () => {
