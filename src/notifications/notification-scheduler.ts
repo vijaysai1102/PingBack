@@ -1,7 +1,7 @@
 import type { RoutedEvent } from '../core/event-router.js';
 import type { Logger } from '../utils/logger.js';
 import { silentLogger } from '../utils/logger.js';
-import type { NotificationAction, NotificationService } from './notification-service.js';
+import type { NotificationService } from './notification-service.js';
 import type {
   EventNotificationConfig,
   PingBackConfig,
@@ -19,22 +19,18 @@ export interface ScheduledNotification {
 export interface NotificationSchedulerOptions {
   notifications: NotificationService;
   getConfig: () => PingBackConfig;
-  /** Produces an action for this exact routed event/session, if supported. */
-  actionFor?: (routed: RoutedEvent) => NotificationAction | undefined;
   logger?: Logger;
 }
 
 export class NotificationScheduler {
   readonly #notifications: NotificationService;
   readonly #getConfig: () => PingBackConfig;
-  readonly #actionFor: (routed: RoutedEvent) => NotificationAction | undefined;
   readonly #logger: Logger;
   readonly #pending = new Map<string, ScheduledNotification>();
 
   constructor(options: NotificationSchedulerOptions) {
     this.#notifications = options.notifications;
     this.#getConfig = options.getConfig;
-    this.#actionFor = options.actionFor ?? (() => undefined);
     this.#logger = options.logger ?? silentLogger();
   }
 
@@ -119,7 +115,6 @@ export class NotificationScheduler {
     const request = buildNotification(routed, {
       desktop: desktopEnabled,
       sound: soundEnabled,
-      action: this.#actionFor(routed),
     });
 
     if (request === undefined) return false;

@@ -1,11 +1,7 @@
 import notifier from 'node-notifier';
 import type { Logger } from '../utils/logger.js';
 import { silentLogger } from '../utils/logger.js';
-import type {
-  NotificationAction,
-  NotificationRequest,
-  NotificationService,
-} from './notification-service.js';
+import type { NotificationRequest, NotificationService } from './notification-service.js';
 import { soundForPriority } from './notification-policy.js';
 import type { SoundPlayer } from './sound-service.js';
 
@@ -15,7 +11,7 @@ export const APP_NAME = 'PingBack';
 export interface NotifierLike {
   notify(
     options: Record<string, unknown>,
-    callback: (error: Error | null, response?: string) => void,
+    callback: (error: Error | null) => void,
   ): unknown;
 }
 
@@ -36,20 +32,6 @@ export function formatBody(request: NotificationRequest): string {
   const parts = [request.message];
   if (request.project !== undefined) parts.push(`Project: ${request.project}`);
   return parts.filter((part) => part.length > 0).join('\n');
-}
-
-/**
- * node-notifier preserves an action label on macOS but lowercases Windows
- * toaster responses. A click on the toast body is reported as `activate`.
- */
-function activatesAction(response: string | undefined, actionLabel: string): boolean {
-  if (response === undefined) return false;
-
-  const normalizedResponse = response.trim().toLocaleLowerCase();
-  return (
-    normalizedResponse === actionLabel.trim().toLocaleLowerCase() ||
-    normalizedResponse === 'activate'
-  );
 }
 
 export class DesktopNotificationService implements NotificationService {
@@ -89,15 +71,9 @@ export class DesktopNotificationService implements NotificationService {
 
   #showToast(request: NotificationRequest): Promise<void> {
     return new Promise<void>((resolve) => {
-      const done = (error: Error | null, response?: string): void => {
+      const done = (error: Error | null): void => {
         if (error) this.#logger.warn('desktop notification failed', { err: error });
         else this.#logger.info('notification delivered', { priority: request.priority });
-        if (
-          request.action !== undefined &&
-          activatesAction(response, request.action.label)
-        ) {
-          void this.#activateAction(request.action);
-        }
         resolve();
       };
 
@@ -109,7 +85,6 @@ export class DesktopNotificationService implements NotificationService {
             appName: APP_NAME,
             sound: false,
             wait: false,
-            ...(request.action === undefined ? {} : { actions: [request.action.label] }),
           },
           done,
         );
@@ -118,36 +93,5 @@ export class DesktopNotificationService implements NotificationService {
         resolve();
       }
     });
-  }
-
-  async #activateAction(action: NotificationAction): Promise<void> {
-    try {
-      const result = await action.onActivate();
-      if (result.handled) return;
-      this.#logger.warn('notification action could not complete', {
-        message: result.message,
-      });
-      this.#showFallback(result.message);
-    } catch (error) {
-      this.#logger.warn('notification action failed', { err: error });
-      this.#showFallback('Unable to return to the agent terminal.');
-    }
-  }
-
-  #showFallback(message: string | undefined): void {
-    try {
-      this.#notifier.notify(
-        {
-          title: APP_NAME,
-          message: message ?? 'Unable to return to the agent terminal.',
-          appName: APP_NAME,
-          sound: false,
-          wait: false,
-        },
-        () => undefined,
-      );
-    } catch {
-      // The original notification remains visible even if the fallback toast cannot be shown.
-    }
   }
 }

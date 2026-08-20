@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { RoutedEvent } from '../core/event-router.js';
-import type { NotificationAction, NotificationRequest } from './notification-service.js';
+import type { NotificationRequest } from './notification-service.js';
 import type { SoundName } from './sound-service.js';
 import type { EventPriority } from '../core/types.js';
 
@@ -25,7 +25,6 @@ export function projectName(cwd: string | undefined): string | undefined {
 export interface NotificationPolicyConfig {
   desktop?: boolean;
   sound?: boolean;
-  action?: NotificationAction | undefined;
 }
 
 /**
@@ -66,6 +65,5 @@ export function buildNotification(
     priority: routed.priority,
     project,
     sound: shouldPlaySound(routed.priority, config),
-    action: config.action,
   };
 }

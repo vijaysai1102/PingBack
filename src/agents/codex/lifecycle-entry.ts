@@ -53,7 +53,8 @@ export async function runCodexLifecycleHook(): Promise<void> {
   const normalized = normalizeCodexHookPayload(payload);
   if (normalized.kind === 'ignored') return;
 
-  const client = new DaemonClient(createPlatform(), IPC_TIMEOUT_MS);
+  const platform = createPlatform();
+  const client = new DaemonClient(platform, IPC_TIMEOUT_MS);
   const pid = codexProcessId();
   if (normalized.kind === 'session') {
     await client.sendSessionUpdate({ ...normalized.update, pid });

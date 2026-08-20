@@ -178,26 +178,4 @@ describe('NotificationScheduler', () => {
     expect(service.delivered).toHaveLength(1);
     expect(service.delivered[0]?.sound).toBe(false);
   });
-
-  it('attaches the focus action returned for the exact routed agent session', async () => {
-    const service = new MockNotificationService();
-    const action = {
-      label: 'Return to Codex',
-      onActivate: () => Promise.resolve({ handled: true }),
-    };
-    const actionFor = vi.fn(() => action);
-    const scheduler = new NotificationScheduler({
-      notifications: service,
-      getConfig: () => DEFAULT_CONFIG,
-      actionFor,
-    });
-    const routed = makeRouted({ agent: 'codex', sessionId: 'codex-42' });
-
-    await scheduler.schedule(routed);
-
-    expect(actionFor).toHaveBeenCalledWith(routed);
-    expect(
-      (service.delivered[0] as NotificationRequest & { action?: unknown }).action,
-    ).toBe(action);
-  });
 });
