@@ -3,8 +3,8 @@
  * agent-specific event shape: adapters translate into these types.
  */
 
-/** v0.1 ships the Claude adapter only; the union exists so adding one is additive. */
-export type AgentType = 'claude';
+/** Supported agent types in v0.2. */
+export type AgentType = 'claude' | 'codex' | 'agy';
 
 export type AgentEventType =
   'attention_required' | 'task_completed' | 'error' | 'question';
