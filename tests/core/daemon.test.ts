@@ -6,6 +6,7 @@ import { Daemon } from '../../src/core/daemon.js';
 import { DaemonState } from '../../src/core/daemon-state.js';
 import { SessionManager } from '../../src/sessions/session-manager.js';
 import { createPlatform, type Platform } from '../../src/platform/platform.js';
+import type { TerminalFocusService } from '../../src/platform/terminal-focus.js';
 import { silentLogger } from '../../src/utils/logger.js';
 import { DEFAULT_CONFIG, type PingBackConfig } from '../../src/config/config-manager.js';
 import type {
@@ -41,19 +42,37 @@ const platform: Platform = createPlatform({
   uid: '501',
 });
 
+const ZERO_DELAY_EVENTS = {
+  attention_required: { delaySeconds: 0, sound: true, desktop: true },
+  question: { delaySeconds: 0, sound: true, desktop: true },
+  error: { delaySeconds: 0, sound: true, desktop: true },
+  task_completed: { delaySeconds: 0, sound: false, desktop: true },
+};
+
 function makeDaemon(
   overrides: {
     notifier?: NotificationService;
-    config?: PingBackConfig;
+    config?: Partial<PingBackConfig>;
     claudeConnected?: () => boolean;
+    terminalFocus?: TerminalFocusService;
   } = {},
 ): { daemon: Daemon; sessions: SessionManager; notifier: RecordingNotifier } {
   const notifier = (overrides.notifier ?? new RecordingNotifier()) as RecordingNotifier;
   const sessions = new SessionManager({ now: () => clock });
 
-  const daemon = new Daemon({
+  const config: PingBackConfig = {
+    ...DEFAULT_CONFIG,
+    ...overrides.config,
+    notifications: {
+      ...DEFAULT_CONFIG.notifications,
+      ...overrides.config?.notifications,
+      events: overrides.config?.notifications?.events ?? ZERO_DELAY_EVENTS,
+    },
+  };
+
+  const daemonOptions = {
     platform,
-    config: overrides.config ?? DEFAULT_CONFIG,
+    config,
     sessions,
     notifications: notifier,
     state: new DaemonState(dir),
@@ -63,7 +82,10 @@ function makeDaemon(
     ...(overrides.claudeConnected === undefined
       ? {}
       : { claudeConnected: overrides.claudeConnected }),
-  });
+  } as ConstructorParameters<typeof Daemon>[0] & { terminalFocus?: TerminalFocusService };
+  if (overrides.terminalFocus !== undefined)
+    daemonOptions.terminalFocus = overrides.terminalFocus;
+  const daemon = new Daemon(daemonOptions);
 
   return { daemon, sessions, notifier };
 }
@@ -108,6 +130,37 @@ describe('Daemon.ingest', () => {
     expect(sessions.get('session-a')?.status).toBe('waiting');
   });
 
+  it('binds Return to Codex to the matching multi-agent session at activation time', async () => {
+    const focusTerminal = vi.fn(() =>
+      Promise.resolve({
+        focused: true,
+        message: 'Focused WindowsTerminal.',
+      }),
+    );
+    const terminalFocus: TerminalFocusService = {
+      detectTerminal: () => Promise.resolve(undefined),
+      focusTerminal,
+    };
+    const { daemon, notifier } = makeDaemon({ terminalFocus });
+
+    await daemon.ingest(
+      eventPayload({
+        id: 'e-codex',
+        agent: 'codex',
+        sessionId: 'codex-42',
+        pid: 4242,
+        cwd: 'C:\\code\\api',
+      }),
+    );
+
+    const action = notifier.sent[0]?.action;
+    expect(action?.label).toBe('Return to Codex');
+    await expect(action?.onActivate()).resolves.toEqual({ handled: true });
+    expect(focusTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'codex-42', agent: 'codex', pid: 4242 }),
+    );
+  });
+
   it('rejects a malformed event', async () => {
     const { daemon } = makeDaemon();
 
@@ -141,7 +194,14 @@ describe('Daemon.ingest', () => {
 
   it('honours the desktop:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: { notifications: { desktop: false, sound: true }, logLevel: 'info' },
+      config: {
+        notifications: {
+          desktop: false,
+          sound: true,
+          volume: 1.0,
+          events: ZERO_DELAY_EVENTS,
+        },
+      },
     });
     const ack = await daemon.ingest(eventPayload({ id: 'e1' }));
 
@@ -151,7 +211,14 @@ describe('Daemon.ingest', () => {
 
   it('honours the sound:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: { notifications: { desktop: true, sound: false }, logLevel: 'info' },
+      config: {
+        notifications: {
+          desktop: true,
+          sound: false,
+          volume: 1.0,
+          events: ZERO_DELAY_EVENTS,
+        },
+      },
     });
     await daemon.ingest(eventPayload({ id: 'e1' }));
 

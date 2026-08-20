@@ -200,24 +200,16 @@ describe('SessionManager multi-agent simultaneous isolation', () => {
     sessions.applyEvent(
       event({ agent: 'codex', sessionId: 'shared-id', cwd: '/proj-codex' }),
     );
-    sessions.applyEvent(
-      event({ agent: 'agy', sessionId: 'shared-id', cwd: '/proj-agy' }),
-    );
 
-    expect(sessions.size).toBe(3);
+    expect(sessions.size).toBe(2);
 
     const claude = sessions.get('shared-id', 'claude');
     const codex = sessions.get('shared-id', 'codex');
-    const agy = sessions.get('shared-id', 'agy');
-
     expect(claude?.agent).toBe('claude');
     expect(claude?.cwd).toBe('/proj-claude');
 
     expect(codex?.agent).toBe('codex');
     expect(codex?.cwd).toBe('/proj-codex');
-
-    expect(agy?.agent).toBe('agy');
-    expect(agy?.cwd).toBe('/proj-agy');
   });
 
   it('records agent type on touch', () => {

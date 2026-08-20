@@ -67,10 +67,23 @@ beforeEach(async () => {
   notifier = new RecordingNotifier();
   sessions = new SessionManager({ store: new FileSessionStore(dir) });
 
+  const zeroDelayEvents = {
+    attention_required: { delaySeconds: 0, sound: true, desktop: true },
+    question: { delaySeconds: 0, sound: true, desktop: true },
+    error: { delaySeconds: 0, sound: true, desktop: true },
+    task_completed: { delaySeconds: 0, sound: false, desktop: true },
+  };
+
   const state = new DaemonState(dir);
   daemon = new Daemon({
     platform,
-    config: DEFAULT_CONFIG,
+    config: {
+      ...DEFAULT_CONFIG,
+      notifications: {
+        ...DEFAULT_CONFIG.notifications,
+        events: zeroDelayEvents,
+      },
+    },
     sessions,
     notifications: notifier,
     state,

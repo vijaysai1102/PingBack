@@ -1,39 +1,26 @@
-/**
- * Shapes of the Codex CLI hook payloads PingBack consumes.
- *
- * These mirror the documented and observed hook input contract for Codex CLI.
- * Every field is optional at the type level because payloads arrive from external
- * processes and are validated at runtime before use.
- */
+/** The documented Codex CLI notification delivered to a configured `notify` command. */
+export const CODEX_NOTIFY_EVENTS = ['agent-turn-complete'] as const;
 
-/** Hook events PingBack subscribes to for Codex. */
-export const CODEX_HOOK_EVENTS = [
-  'UserPromptSubmit',
-  'user_prompt_submit',
-  'Stop',
-  'stop',
-] as const;
-
-export type CodexHookEvent = (typeof CODEX_HOOK_EVENTS)[number];
+export type CodexNotifyEvent = (typeof CODEX_NOTIFY_EVENTS)[number];
 
 export interface CodexHookPayload {
+  type?: unknown;
+  'thread-id'?: unknown;
+  thread_id?: unknown;
+  threadId?: unknown;
   session_id?: unknown;
-  turn_id?: unknown;
+  sessionId?: unknown;
   cwd?: unknown;
+  'turn-id'?: unknown;
+  turn_id?: unknown;
   hook_event_name?: unknown;
-
-  // Prompt submit
-  prompt?: unknown;
-
-  // Stop / Completion / Error
-  last_assistant_message?: unknown;
-  error?: unknown;
-  error_details?: unknown;
-  transcript_path?: unknown;
+  tool_name?: unknown;
+  permission_mode?: unknown;
 }
 
-export function isCodexHookEvent(value: unknown): value is CodexHookEvent {
+export function isCodexNotifyEvent(value: unknown): value is CodexNotifyEvent {
   return (
-    typeof value === 'string' && (CODEX_HOOK_EVENTS as readonly string[]).includes(value)
+    typeof value === 'string' &&
+    (CODEX_NOTIFY_EVENTS as readonly string[]).includes(value)
   );
 }

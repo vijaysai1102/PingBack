@@ -1,5 +1,16 @@
 import type { EventPriority } from '../core/types.js';
 
+export interface NotificationActionResult {
+  handled: boolean;
+  /** User-facing fallback text when the action could not complete safely. */
+  message?: string | undefined;
+}
+
+export interface NotificationAction {
+  label: string;
+  onActivate: () => Promise<NotificationActionResult>;
+}
+
 export interface NotificationRequest {
   title: string;
   message: string;
@@ -8,6 +19,8 @@ export interface NotificationRequest {
   project?: string | undefined;
   /** Whether a sound should accompany this notification. */
   sound: boolean;
+  /** Optional action bound to this individual notification's session. */
+  action?: NotificationAction | undefined;
 }
 
 export interface NotificationService {

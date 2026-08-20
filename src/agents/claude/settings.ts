@@ -31,6 +31,7 @@ interface MatcherGroup {
  */
 const TIMEOUT_SECONDS: Record<ClaudeHookEvent, number> = {
   Notification: 5,
+  Stop: 5,
   StopFailure: 5,
   SessionStart: 5,
   UserPromptSubmit: 5,

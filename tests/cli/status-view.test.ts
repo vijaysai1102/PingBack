@@ -98,7 +98,6 @@ describe('formatRunningStatus', () => {
             installed: true,
           },
           { name: 'codex', displayName: 'Codex CLI', configured: true, installed: true },
-          { name: 'agy', displayName: 'AGY CLI', configured: false, installed: true },
         ],
       }),
       NOW,
@@ -107,7 +106,7 @@ describe('formatRunningStatus', () => {
     expect(output).toContain('Agents');
     expect(output).toContain('Claude Code:');
     expect(output).toContain('Codex CLI:');
-    expect(output).toContain('AGY CLI:');
+    expect(output).not.toContain('AGY CLI:');
   });
 
   it('counts a single session needing attention', () => {
@@ -135,7 +134,7 @@ describe('formatRunningStatus', () => {
 
   it('says nothing needs attention when all sessions are calm', () => {
     const output = formatRunningStatus(
-      status([{ id: 's1', agent: 'agy', status: 'working', startedAt: NOW }]),
+      status([{ id: 's1', agent: 'codex', status: 'working', startedAt: NOW }]),
       NOW,
     );
 

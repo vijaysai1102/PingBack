@@ -1,7 +1,6 @@
 import path from 'node:path';
 import type { RoutedEvent } from '../core/event-router.js';
-import type { NotificationConfig } from '../config/config-manager.js';
-import type { NotificationRequest } from './notification-service.js';
+import type { NotificationAction, NotificationRequest } from './notification-service.js';
 import type { SoundName } from './sound-service.js';
 import type { EventPriority } from '../core/types.js';
 
@@ -23,13 +22,19 @@ export function projectName(cwd: string | undefined): string | undefined {
   return path.basename(last);
 }
 
+export interface NotificationPolicyConfig {
+  desktop?: boolean;
+  sound?: boolean;
+  action?: NotificationAction | undefined;
+}
+
 /**
  * Low-priority events (task completions) are silent by default so PingBack
  * stays unobtrusive; anything that blocks the developer gets a sound.
  */
 export function shouldPlaySound(
   priority: RoutedEvent['priority'],
-  config: NotificationConfig,
+  config: NotificationPolicyConfig,
 ): boolean {
   if (!config.sound) return false;
   return priority !== 'low';
@@ -49,11 +54,11 @@ export function soundForPriority(priority: EventPriority): SoundName {
 
 export function buildNotification(
   routed: RoutedEvent,
-  config: NotificationConfig,
+  config: NotificationPolicyConfig,
 ): NotificationRequest | undefined {
   if (!config.desktop) return undefined;
 
-  const project = projectName(routed.session.cwd ?? routed.event.cwd);
+  const project = projectName(routed.session?.cwd ?? routed.event.cwd);
 
   return {
     title: routed.event.title,
@@ -61,5 +66,6 @@ export function buildNotification(
     priority: routed.priority,
     project,
     sound: shouldPlaySound(routed.priority, config),
+    action: config.action,
   };
 }

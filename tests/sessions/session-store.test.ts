@@ -32,12 +32,17 @@ describe('parseSession', () => {
 
   it.each([
     ['a missing id', { ...sample, id: undefined }],
-    ['a non-claude agent', { ...sample, agent: 'codex' }],
     ['a missing startedAt', { ...sample, startedAt: undefined }],
     ['a non-object', 'nope'],
     ['null', null],
   ])('rejects %s', (_label, raw) => {
     expect(parseSession(raw)).toBeUndefined();
+  });
+
+  it('accepts a supported Codex record', () => {
+    const session = { ...sample, agent: 'codex' as const };
+
+    expect(parseSession(session)).toEqual(session);
   });
 
   it('falls back to unknown for an unrecognized status', () => {
@@ -61,6 +66,15 @@ describe('FileSessionStore', () => {
     store.save([sample]);
 
     expect(new FileSessionStore(dir).load()).toEqual([sample]);
+  });
+
+  it('round-trips simultaneous Claude and Codex sessions', () => {
+    const store = new FileSessionStore(dir);
+    const codex = { ...sample, id: 'codex-1', agent: 'codex' as const };
+    const claude = { ...sample, id: 'claude-1', agent: 'claude' as const };
+    store.save([codex, claude]);
+
+    expect(new FileSessionStore(dir).load()).toEqual([codex, claude]);
   });
 
   it('creates the data directory if missing', () => {

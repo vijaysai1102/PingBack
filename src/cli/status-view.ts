@@ -34,8 +34,6 @@ function agentDisplayName(agent: AgentSession['agent']): string {
       return 'Claude';
     case 'codex':
       return 'Codex';
-    case 'agy':
-      return 'AGY';
   }
 }
 

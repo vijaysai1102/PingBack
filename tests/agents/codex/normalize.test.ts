@@ -3,136 +3,103 @@ import { normalizeCodexHookPayload } from '../../../src/agents/codex/normalize.j
 
 const now = (): number => 1_700_000_000_000;
 
-describe('normalizeCodexHookPayload: UserPromptSubmit', () => {
-  it('normalizes UserPromptSubmit to session working update', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'codex-sess-1',
-        cwd: '/path/to/project',
-        hook_event_name: 'UserPromptSubmit',
-        prompt: 'Refactor this module',
-        turn_id: 'turn-1',
-      },
-      now,
-    );
+describe('normalizeCodexHookPayload: notify', () => {
+  it('normalizes the documented turn-complete notification into task completion', () => {
+    const payload = {
+      type: 'agent-turn-complete',
+      'thread-id': 'codex-thread-1',
+      cwd: '/path/to/project',
+    } as Parameters<typeof normalizeCodexHookPayload>[0];
 
-    expect(result).toEqual({
+    expect(normalizeCodexHookPayload(payload, now)).toEqual({
+      kind: 'event',
+      event: {
+        agent: 'codex',
+        sessionId: 'codex-thread-1',
+        type: 'task_completed',
+        title: 'Codex finished',
+        message: 'Codex finished working.',
+        cwd: '/path/to/project',
+        timestamp: 1_700_000_000_000,
+        metadata: { notifyType: 'agent-turn-complete' },
+      },
+    });
+  });
+
+  it('accepts the snake-case thread identifier used by some Codex runtimes', () => {
+    const payload = {
+      type: 'agent-turn-complete',
+      thread_id: 'codex-thread-2',
+    } as Parameters<typeof normalizeCodexHookPayload>[0];
+
+    expect(normalizeCodexHookPayload(payload, now)).toMatchObject({
+      kind: 'event',
+      event: { sessionId: 'codex-thread-2', type: 'task_completed' },
+    });
+  });
+
+  it('ignores an unrecognized notification without creating a session', () => {
+    const payload = {
+      type: 'other-event',
+      'thread-id': 'codex-thread-1',
+    } as Parameters<typeof normalizeCodexHookPayload>[0];
+
+    expect(normalizeCodexHookPayload(payload, now)).toEqual({
+      kind: 'ignored',
+      reason: 'unsupported Codex notify event: other-event',
+    });
+  });
+
+  it('ignores a turn-complete notification without a thread identifier', () => {
+    const payload = { type: 'agent-turn-complete' } as Parameters<
+      typeof normalizeCodexHookPayload
+    >[0];
+
+    expect(normalizeCodexHookPayload(payload, now)).toEqual({
+      kind: 'ignored',
+      reason: 'missing Codex thread identifier',
+    });
+  });
+
+  it('turns Codex permission requests into attention notifications without exposing tool input', () => {
+    const payload = {
+      hook_event_name: 'PermissionRequest',
+      session_id: 'codex-session-1',
+      cwd: '/path/to/project',
+      tool_name: 'shell',
+      tool_input: { command: 'contains-sensitive-command' },
+    } as Parameters<typeof normalizeCodexHookPayload>[0];
+
+    expect(normalizeCodexHookPayload(payload, now)).toEqual({
+      kind: 'event',
+      event: {
+        agent: 'codex',
+        sessionId: 'codex-session-1',
+        type: 'attention_required',
+        title: 'Codex needs your attention',
+        message: 'Codex is waiting for your approval.',
+        cwd: '/path/to/project',
+        timestamp: 1_700_000_000_000,
+        metadata: { hookEvent: 'PermissionRequest', toolName: 'shell' },
+      },
+    });
+  });
+
+  it('marks a Codex session working when a user submits a new prompt', () => {
+    const payload = {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'codex-session-2',
+      cwd: '/path/to/project',
+    } as Parameters<typeof normalizeCodexHookPayload>[0];
+
+    expect(normalizeCodexHookPayload(payload, now)).toEqual({
       kind: 'session',
       update: {
-        sessionId: 'codex-sess-1',
+        agent: 'codex',
+        sessionId: 'codex-session-2',
         status: 'working',
         cwd: '/path/to/project',
-        agent: 'codex',
       },
     });
-  });
-
-  it('tolerates lower-case user_prompt_submit', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'codex-sess-1',
-        cwd: '/path/to/project',
-        hook_event_name: 'user_prompt_submit',
-      },
-      now,
-    );
-
-    expect(result.kind).toBe('session');
-  });
-});
-
-describe('normalizeCodexHookPayload: Stop', () => {
-  it('normalizes Stop without errors to attention_required event', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'codex-sess-1',
-        cwd: '/path/to/project',
-        hook_event_name: 'Stop',
-        last_assistant_message: 'Finished running tests, waiting for your input.',
-        turn_id: 'turn-1',
-      },
-      now,
-    );
-
-    expect(result.kind).toBe('event');
-    if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event).toMatchObject({
-      agent: 'codex',
-      sessionId: 'codex-sess-1',
-      type: 'attention_required',
-      title: 'Codex needs your attention',
-      message: 'Finished running tests, waiting for your input.',
-      cwd: '/path/to/project',
-      timestamp: 1_700_000_000_000,
-      metadata: {
-        hookEvent: 'Stop',
-        turnId: 'turn-1',
-      },
-    });
-  });
-
-  it('normalizes Stop with error to error event', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'codex-sess-1',
-        cwd: '/path/to/project',
-        hook_event_name: 'Stop',
-        error: 'ExecutionTimeout',
-        last_assistant_message: 'Codex hit an execution timeout error',
-      },
-      now,
-    );
-
-    expect(result.kind).toBe('event');
-    if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event).toMatchObject({
-      agent: 'codex',
-      sessionId: 'codex-sess-1',
-      type: 'error',
-      title: 'Codex hit an error',
-      message: 'Codex hit an execution timeout error',
-      metadata: {
-        hookEvent: 'Stop',
-        error: 'ExecutionTimeout',
-      },
-    });
-  });
-
-  it('falls back to default message when last_assistant_message is absent', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'codex-sess-1',
-        hook_event_name: 'Stop',
-      },
-      now,
-    );
-
-    if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event.message).toBe('Codex is waiting for you.');
-  });
-});
-
-describe('normalizeCodexHookPayload: malformed / unsupported payloads', () => {
-  it('ignores unsupported hook events', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        session_id: 'sess-1',
-        hook_event_name: 'UnsupportedEvent',
-      },
-      now,
-    );
-
-    expect(result.kind).toBe('ignored');
-  });
-
-  it('ignores payloads without session_id', () => {
-    const result = normalizeCodexHookPayload(
-      {
-        hook_event_name: 'Stop',
-      },
-      now,
-    );
-
-    expect(result.kind).toBe('ignored');
   });
 });

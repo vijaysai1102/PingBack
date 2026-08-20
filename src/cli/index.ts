@@ -21,14 +21,16 @@ export function buildProgram(): Command {
 
   program
     .command('setup')
-    .description('Detect Claude Code, install the integration and start PingBack')
+    .description(
+      'Detect Claude Code and Codex CLI, install integrations and start PingBack',
+    )
     .action(async () => {
       await runSetup();
     });
 
   program
     .command('uninstall')
-    .description("Remove PingBack's Claude Code integration")
+    .description('Remove PingBack agent integrations')
     .action(() => {
       runUninstall();
     });

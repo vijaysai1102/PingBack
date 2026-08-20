@@ -4,7 +4,7 @@
  */
 
 /** Supported agent types in v0.2. */
-export type AgentType = 'claude' | 'codex' | 'agy';
+export type AgentType = 'claude' | 'codex';
 
 export type AgentEventType =
   'attention_required' | 'task_completed' | 'error' | 'question';

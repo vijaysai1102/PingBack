@@ -7,7 +7,7 @@ import {
   type SessionStatus,
 } from './types.js';
 
-export const SUPPORTED_AGENTS: readonly AgentType[] = ['claude', 'codex', 'agy'];
+export const SUPPORTED_AGENTS: readonly AgentType[] = ['claude', 'codex'];
 
 export function isAgentType(value: unknown): value is AgentType {
   return typeof value === 'string' && SUPPORTED_AGENTS.includes(value as AgentType);
@@ -19,8 +19,6 @@ function defaultTitleForAgent(agent: AgentType): string {
       return 'Claude Code';
     case 'codex':
       return 'Codex CLI';
-    case 'agy':
-      return 'AGY CLI';
   }
 }
 
@@ -74,7 +72,7 @@ export function parseAgentEvent(raw: unknown, now: () => number = Date.now): Age
   if (!isAgentType(record.agent)) {
     throw new PingBackError(`Unsupported agent: ${String(record.agent)}`, {
       code: 'INVALID_EVENT',
-      hint: 'PingBack supports "claude", "codex", and "agy" agents.',
+      hint: 'PingBack supports "claude" and "codex" agents.',
     });
   }
 

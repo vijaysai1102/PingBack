@@ -2,304 +2,133 @@
 
 Never miss when your AI coding agent needs you.
 
-PingBack runs locally in the background and notifies you when Claude Code needs your attention during a long-running coding task.
+PingBack is a local background daemon that tracks supported coding-agent sessions and sends a desktop notification—with optional sound—when an event needs attention. It has no account, cloud service, telemetry, or network listener.
 
-Supported:
+## Supported platforms and agents
 
-- Windows
-- macOS
+- Windows and macOS (Node.js 20+)
 - Claude Code
+- Codex CLI
 
-## The problem
+## Install and set up
 
-You give Claude Code a long task and switch to something else. Claude works for a few minutes, then stops to ask for permission to run a command — and waits. You don't notice for twenty minutes, because nothing told you.
-
-PingBack closes that gap. When Claude needs you, you get a desktop notification and a sound, wherever you are on your machine.
-
-## Installation
-
-Requires Node.js 20 or newer.
-
-```bash
+```powershell
 npm install -g pingback-cli
-```
-
-The package is [`pingback-cli`](https://www.npmjs.com/package/pingback-cli) on npm (`pingback` was already taken). The command you run is still `pingback`. Tagged builds are also on [GitHub Releases](https://github.com/vijaysai1102/PingBack/releases).
-
-## Setup
-
-```bash
 pingback setup
 ```
 
-This detects your OS, Node.js, and Claude Code, installs the Claude Code integration, verifies notifications and sound, and starts the background daemon.
+Setup detects each installed supported CLI, configures only the available integrations, verifies notification delivery, and starts the local daemon. Missing agents are optional and do not prevent setup.
 
-Restart any Claude Code sessions that are already open — hooks are read at session start.
+Restart an agent session opened before setup so it reloads its integration configuration.
 
-That's it. Use Claude Code normally.
+## Commands
 
-### Commands
+| Command                             | Description                                                            |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `pingback setup`                    | Detect agents, configure integrations, and start the daemon.           |
+| `pingback start` / `pingback stop`  | Manage the local daemon.                                               |
+| `pingback status`                   | Show the daemon plus sessions grouped by agent.                        |
+| `pingback config`                   | Display notification settings.                                         |
+| `pingback config set <key> <value>` | Update a notification setting.                                         |
+| `pingback uninstall`                | Remove PingBack integrations without removing unrelated configuration. |
 
-| Command                             | What it does                                                |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `pingback setup`                    | Detect Claude Code, install the integration, start PingBack |
-| `pingback status`                   | Show daemon status and tracked sessions                     |
-| `pingback start`                    | Start the background daemon                                 |
-| `pingback stop`                     | Stop the background daemon                                  |
-| `pingback config`                   | Show current settings                                       |
-| `pingback config set <key> <value>` | Change a setting                                            |
-| `pingback uninstall`                | Remove the Claude Code integration                          |
+## How integrations work
 
-`pingback status` looks like this:
+All agent-specific payloads are normalized into the same local event/session model before reaching the session store and notification system.
 
-```text
-PINGBACK
+- Claude Code uses its lifecycle hooks for working, attention, error, and completion events.
+- Codex CLI uses its supported `config.toml` `notify` command for completion, plus asynchronous official lifecycle hooks for working state and permission requests. A permission request produces an attention notification, but PingBack deliberately emits no decision or stdout, so Codex's normal approval dialog remains in control. Codex does not expose separate official events for ordinary questions or errors/failures, so PingBack cannot send distinct alerts for those cases. An existing `notify` command is saved, forwarded by the PingBack bridge, and restored by uninstall. After setup, open Codex `/hooks` and trust the new PingBack command once.
 
-Status: * Running
-Platform: Windows
+## Notification defaults
 
-Claude Code: [ok] Connected
+By default:
 
-Sessions
-────────────────────────────────
+- Attention required, questions, and errors show a desktop notification and play sound immediately.
+- Task completion shows a desktop notification without sound.
+- Desktop notifications and sound can each be disabled globally.
+- Volume accepts a value from `0.0` to `1.0`.
 
-[!] Claude
-  Project: PingBack
-  Status: Waiting
-  Waiting: 3s
+### Event reference
 
-1 session needs your attention.
-```
+| Event                | Meaning                                          | Claude Code                                                             | Codex CLI                      | Default alert   |
+| -------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------ | --------------- |
+| `attention_required` | The agent is blocked and needs you to intervene. | Permission needed, waiting for input, or stopped awaiting intervention. | Permission or approval needed. | Desktop + sound |
+| `question`           | The agent explicitly asks a normal question.     | Supported.                                                              | No separate official event.    | Desktop + sound |
+| `error`              | The agent stopped because of a failure.          | Supported.                                                              | No separate official event.    | Desktop + sound |
+| `task_completed`     | The agent finished its work or turn.             | Supported.                                                              | Supported.                     | Desktop only    |
 
-## How it works
+Each event can have a grace period. PingBack waits for that period before alerting, so a situation that resolves quickly can avoid an unnecessary notification.
 
-PingBack registers [Claude Code hooks](https://docs.claude.com/en/docs/claude-code/hooks) in `~/.claude/settings.json`. When Claude fires a hook, a short-lived script forwards the payload to the PingBack daemon over a local IPC channel. The daemon normalizes the payload, updates the session, and decides whether to notify you.
+### Change notification settings
 
-```text
-Claude Code
-    │  hook fires
-    ▼
-hook-entry script
-    │  local IPC (named pipe / Unix socket)
-    ▼
-PingBack daemon ──► session tracking
-    │
-    ▼
-desktop notification + sound
-```
+View the active local settings:
 
-Five hooks are installed:
-
-| Hook               | Meaning for PingBack                                               |
-| ------------------ | ------------------------------------------------------------------ |
-| `Notification`     | Claude wants your attention (permission prompt, idle, needs input) |
-| `StopFailure`      | Claude stopped because of an error                                 |
-| `SessionStart`     | Session is working                                                 |
-| `UserPromptSubmit` | Session is working                                                 |
-| `SessionEnd`       | Session completed                                                  |
-
-### When it makes a sound
-
-Events are classified by priority, and each priority gets a distinct tone so you can tell what happened without looking at the screen.
-
-| Priority | Example                          | Sound             |
-| -------- | -------------------------------- | ----------------- |
-| High     | Claude needs permission or input | `attention`       |
-| Medium   | Claude stopped with an error     | `error`           |
-| Low      | Task finished                    | silent by default |
-
-Completions are silent so PingBack stays out of the way. Anything that actually blocks you makes noise.
-
-The sounds are plain WAV tones generated at build time, so there are no bundled audio assets or licensing concerns. Playback uses `afplay` on macOS and PowerShell on Windows.
-
-### Duplicate suppression
-
-The daemon drops repeated events — both by event ID and within a short time window — so a burst of hooks produces one notification rather than a stream of them.
-
-## Configuration
-
-```bash
+```powershell
 pingback config
+```
+
+Set global sound or volume:
+
+```powershell
 pingback config set notifications.sound false
+pingback config set notifications.volume 0.7
 ```
 
-| Key                     | Values                           | Default |
-| ----------------------- | -------------------------------- | ------- |
-| `notifications.desktop` | `true` / `false`                 | `true`  |
-| `notifications.sound`   | `true` / `false`                 | `true`  |
-| `logLevel`              | `debug`, `info`, `warn`, `error` | `info`  |
+Change one event's desktop, sound, or delay setting:
 
-Restart PingBack after changing settings:
-
-```bash
-pingback stop && pingback start
+```powershell
+pingback config set notifications.events.attention_required.sound false
+pingback config set notifications.events.task_completed.desktop false
+pingback config set notifications.events.error.delaySeconds 5
 ```
 
-A malformed config file never prevents PingBack from starting — invalid fields fall back to defaults with a warning.
+Event-level `desktop`, `sound`, and optional `delaySeconds` settings are also available through `pingback config set`.
 
-### File locations
+For example, to use a five-second grace period for every event in your local configuration:
 
-**Windows**
-
-```text
-%APPDATA%\PingBack\config.json           settings
-%LOCALAPPDATA%\PingBack\sessions.json    tracked sessions
-%LOCALAPPDATA%\PingBack\logs\daemon.log  log
+```powershell
+pingback config set notifications.events.attention_required.delaySeconds 5
+pingback config set notifications.events.question.delaySeconds 5
+pingback config set notifications.events.error.delaySeconds 5
+pingback config set notifications.events.task_completed.delaySeconds 5
 ```
 
-**macOS**
+Restart PingBack after changing settings: `pingback stop`, then `pingback start`.
 
-```text
-~/Library/Application Support/PingBack/config.json     settings
-~/Library/Application Support/PingBack/sessions.json   tracked sessions
-~/Library/Logs/PingBack/daemon.log                     log
-```
+## Return to Agent
 
-## Privacy
+Notifications include a session-bound `Return to <Agent>` action. The action resolves the recorded agent and session ID together, so simultaneous Claude and Codex sessions cannot be mixed up.
 
-PingBack is completely local. It makes no network requests, has no telemetry, no accounts, and no external services.
+- On Windows, PingBack follows the agent PID's parent chain and focuses only a recognized terminal or VS Code window with a visible handle.
+- On macOS, PingBack selects a Terminal.app or iTerm tab only when its TTY exactly matches the agent process.
+- If the mapping is absent, ambiguous, unsupported, or blocked by OS focus restrictions, PingBack does not focus another window. It shows a fallback with the project path instead.
 
-It never reads or stores your conversations, prompts, or code. A session record contains only what's needed to tell you which project needs attention:
+macOS terminal focus is unit-tested but still needs manual validation on a Mac, including any Automation permission prompt.
 
-```json
-{
-  "id": "71c8ce2f-e046-42c5-96c1-a116e571ca2e",
-  "agent": "claude",
-  "status": "waiting",
-  "startedAt": 1786223520275,
-  "lastActivityAt": 1786223520837,
-  "cwd": "C:\\PingBack",
-  "pid": 34676
-}
-```
+## Privacy and security
 
-Notification text comes from Claude's own hook message (for example, "Claude needs your permission to use Bash"). Log fields are truncated to 500 characters so nothing large is ever written to disk.
+PingBack stays local:
 
-The daemon listens on a named pipe (Windows) or a Unix domain socket (macOS) — never a network port — and requires a token stored with restricted permissions, so other users on the machine can't inject events.
+- The daemon uses a user-scoped named pipe on Windows or Unix socket on macOS.
+- IPC requests require a local token.
+- Session records contain only ID, agent, status, timestamps, working directory, and PID when available.
+- PingBack never stores prompts, conversation transcripts, source code, or terminal buffers.
 
 ## Troubleshooting
 
-**No notifications appear**
+Run `pingback status` first. If the daemon is stopped, run `pingback start`; if an integration is not configured, rerun `pingback setup` and restart the relevant agent session.
 
-Check the daemon is running and Claude is connected:
+For a failed Return action, use the project path in the fallback notification. PingBack intentionally avoids guessing among unrelated terminal windows.
 
-```bash
-pingback status
-```
-
-If it says `Not running`, run `pingback start`.
-
-**Claude Code shows as not connected**
-
-The hooks aren't installed. Run `pingback setup` again, then restart your Claude Code sessions — hooks are only read when a session starts.
-
-**Notifications work but there's no sound**
-
-Confirm sound is enabled with `pingback config`. Sound failures never block a notification: if audio fails, you still get the toast and a warning is written to the log.
-
-**Check the log**
-
-The log records whether a notification was actually delivered:
-
-```json
-{"level":"info","msg":"event routed","type":"attention_required","priority":"high"}
-{"level":"info","msg":"notification delivered","priority":"high"}
-```
-
-If you see `event routed` but no `notification delivered`, the OS rejected the toast. Set `logLevel` to `debug` for more detail.
-
-**Windows notifications are silent or hidden**
-
-Check Windows Focus Assist / Do Not Disturb, and confirm notifications are allowed in Settings → System → Notifications.
-
-**Start over**
-
-```bash
-pingback uninstall
-pingback setup
-```
-
-`uninstall` removes PingBack's hooks and leaves the rest of your Claude Code settings untouched.
-
-## Security note on dependencies
-
-`npm audit` reports a moderate advisory ([GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq)) for `uuid`, pulled in transitively by `node-notifier`. There is no upstream fix available.
-
-It is not reachable from PingBack. The advisory covers a missing buffer bounds check in `uuid`'s `v3`/`v5`/`v6` functions when a `buf` argument is supplied. `node-notifier` calls `uuid` in exactly one place — `v4()` with no arguments, to name a pipe — so the affected code path is never executed.
-
-We kept `node-notifier` deliberately. It is the most widely used notification library in the Node ecosystem and bundles the native toast helper that gives PingBack a proper app identity on Windows. Swapping it for a smaller, less-audited fork to silence a warning about unreachable code would trade a cosmetic issue for real supply-chain risk.
+On Windows, ensure PingBack is allowed in **Settings → System → Notifications**. On macOS, allow notification and Automation permissions when prompted.
 
 ## Development
 
-```bash
-npm install
-npm run build      # generates sounds, then compiles TypeScript
+```powershell
 npm test
-npm run lint
 npm run typecheck
-npm run format
-```
-
-Testing uses Vitest. `tests/integration/end-to-end.test.ts` drives the full chain — hook payload through daemon to notification and session state — with the notifier stubbed.
-
-To try local changes against real Claude Code:
-
-```bash
+npm run lint
 npm run build
-npm pack
-npm install -g ./pingback-cli-0.1.0.tgz
-pingback setup
 ```
 
-`setup` rewrites the hook path in place, so switching between a development checkout and a global install won't leave duplicate hooks behind.
-
-### Continuous integration
-
-`.github/workflows/ci.yml` runs on every push and pull request:
-
-- **Quality** — formatting, lint, and types.
-- **Test** — the full suite on Windows and macOS across Node 20.19, 22, and 24.
-- **Package smoke** — packs the real tarball, installs it globally, and drives the CLI from outside the repo, including the daemon start/status/stop lifecycle and a config round-trip.
-
-The package smoke job exists because the failures that hurt most are the ones unit tests can't see: a broken `bin` path, a missing bundled sound, or a bad `files` list. Those only appear once someone actually installs the package.
-
-Two constraints shape the workflow. The build must run before the tests, because the sound assets are generated rather than committed. And every job runs on Windows or macOS — never Linux — because `package.json` declares `os: ["win32", "darwin"]`, which makes `npm ci` fail outright on a Linux runner.
-
-`.github/workflows/release.yml` runs on a `v*` tag. It repeats the full gate on both platforms, checks that the tag matches the version in `package.json`, runs `npm publish --dry-run`, verifies the tarball contains the CLI, daemon, hook entry point, and sounds while containing no tests, and uploads the tarball as a build artifact. `pingback-cli` is published on npm from the tagged release; the workflow's own publish job is still commented out pending an `NPM_TOKEN` repository secret.
-
-## Architecture
-
-PingBack keeps agent-specific code out of the core. Nothing in `core/`, `notifications/`, or `sessions/` knows that Claude Code exists.
-
-The short agent brief (loaded every Claude Code session) lives in [`CLAUDE.md`](CLAUDE.md). Milestone specifications and work logs live in [`docs/versions/`](docs/versions/) (such as the [v0.1 baseline specification](docs/versions/v0.1.md)).
-
-```text
-src/
-  core/           events, routing, IPC, daemon
-  agents/         adapter interface + Claude Code integration
-  sessions/       session tracking and persistence
-  notifications/  desktop notifications and sound
-  platform/       Windows and macOS specifics
-  config/         settings
-  cli/            command line interface
-  utils/          logging, paths, errors
-```
-
-Platform differences — file locations, IPC endpoint, sound playback — sit behind a single `Platform` interface with one implementation per OS, so no OS checks are scattered through the codebase.
-
-Agent events are normalized into a common model (`attention_required`, `question`, `error`, `task_completed`) at the boundary. Adding an agent means writing an adapter that produces those events, not modifying the core.
-
-## Limitations
-
-- Claude Code is the only supported agent in v0.1.
-- Windows and macOS only. Linux is not supported.
-- Notifications are local to the machine Claude is running on; there is no phone or remote delivery.
-- `pid` is captured on a best-effort basis for diagnostics and is not used to identify sessions.
-
-## Future agent integrations
-
-The adapter interface exists so other agents can be added without touching the core: Cursor, Codex, Gemini CLI, Copilot, and others. v0.1 ships Claude Code only, and PingBack does not claim support for anything that isn't implemented.
-
-## License
-
-[MIT](LICENSE) © Vijay Sai Chigullapally
+The project supports only Windows and macOS. Please do not add cloud services, telemetry, or additional agent integrations without an explicit change request.

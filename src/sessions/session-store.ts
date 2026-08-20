@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentSession, SessionStatus } from '../core/types.js';
+import type { AgentSession, AgentType, SessionStatus } from '../core/types.js';
 import { readJsonFile, writeJsonFileAtomic } from '../utils/json-file.js';
 
 export interface SessionStore {
@@ -14,6 +14,8 @@ const VALID_STATUSES: readonly SessionStatus[] = [
   'error',
   'unknown',
 ];
+
+const VALID_AGENTS: readonly AgentType[] = ['claude', 'codex'];
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -34,7 +36,7 @@ export function parseSession(raw: unknown): AgentSession | undefined {
 
   const id = optionalString(record.id);
   if (id === undefined) return undefined;
-  if (record.agent !== 'claude') return undefined;
+  if (!VALID_AGENTS.includes(record.agent as AgentType)) return undefined;
 
   const status = VALID_STATUSES.includes(record.status as SessionStatus)
     ? (record.status as SessionStatus)
@@ -52,7 +54,7 @@ export function parseSession(raw: unknown): AgentSession | undefined {
 
   return {
     id,
-    agent: 'claude',
+    agent: record.agent as AgentType,
     status,
     startedAt,
     pid: optionalNumber(record.pid),

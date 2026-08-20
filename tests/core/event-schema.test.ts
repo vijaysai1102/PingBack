@@ -48,14 +48,18 @@ describe('parseAgentEvent', () => {
     expect(() => parseAgentEvent(payload)).toThrow(PingBackError);
   });
 
-  it('accepts events from all supported agents (claude, codex, agy)', () => {
+  it('accepts events from the supported Claude and Codex agents', () => {
     const claude = parseAgentEvent({ ...validPayload, agent: 'claude' });
     const codex = parseAgentEvent({ ...validPayload, agent: 'codex' });
-    const agy = parseAgentEvent({ ...validPayload, agent: 'agy' });
 
     expect(claude.agent).toBe('claude');
     expect(codex.agent).toBe('codex');
-    expect(agy.agent).toBe('agy');
+  });
+
+  it('rejects AGY events after AGY support is removed', () => {
+    expect(() => parseAgentEvent({ ...validPayload, agent: 'agy' })).toThrow(
+      'Unsupported agent: agy',
+    );
   });
 
   it('rejects an unsupported agent', () => {

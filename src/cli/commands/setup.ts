@@ -47,7 +47,7 @@ export async function runSetup(): Promise<void> {
   if (installedAdapters.length === 0) {
     throw new PingBackError('No supported coding agents were detected.', {
       code: 'NO_AGENTS_FOUND',
-      hint: 'Install Claude Code, Codex CLI, or AGY CLI and run:\n\n    pingback setup',
+      hint: 'Install Claude Code or Codex CLI and run:\n\n    pingback setup',
     });
   }
 

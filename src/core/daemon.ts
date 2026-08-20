@@ -2,12 +2,13 @@ import type { Platform } from '../platform/platform.js';
 import type { PingBackConfig } from '../config/config-manager.js';
 import type { Logger } from '../utils/logger.js';
 import type { NotificationService } from '../notifications/notification-service.js';
-import { buildNotification } from '../notifications/notification-policy.js';
+import { NotificationScheduler } from '../notifications/notification-scheduler.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { DaemonState } from './daemon-state.js';
 import { EventRouter } from './event-router.js';
 import { parseAgentEvent, parseSessionUpdate } from './event-schema.js';
 import type { AgentAdapter } from '../agents/adapter.js';
+import type { TerminalFocusService } from '../platform/terminal-focus.js';
 import { IpcServer } from './ipc/server.js';
 import type { AgentStatusInfo, DaemonStatus, IpcRequest } from './ipc/protocol.js';
 
@@ -20,6 +21,7 @@ export interface DaemonOptions {
   logger: Logger;
   version: string;
   adapters?: AgentAdapter[] | undefined;
+  terminalFocus?: TerminalFocusService | undefined;
   /** Reports whether the Claude integration is currently installed (legacy). */
   claudeConnected?: () => boolean;
   pruneIntervalMs?: number;
@@ -41,6 +43,7 @@ export interface EventAck {
 export class Daemon {
   readonly #options: DaemonOptions;
   readonly #router: EventRouter;
+  readonly #scheduler: NotificationScheduler;
   readonly #logger: Logger;
   readonly #now: () => number;
 
@@ -55,6 +58,12 @@ export class Daemon {
     this.#logger = options.logger;
     this.#now = options.now ?? (() => Date.now());
     this.#router = new EventRouter({ sessions: options.sessions, now: this.#now });
+    this.#scheduler = new NotificationScheduler({
+      notifications: options.notifications,
+      getConfig: () => this.#options.config,
+      actionFor: (routed) => this.#actionFor(routed.event.agent, routed.event.sessionId),
+      logger: this.#logger,
+    });
   }
 
   get startedAt(): number {
@@ -117,6 +126,7 @@ export class Daemon {
       this.#pruneTimer = undefined;
     }
 
+    this.#scheduler.dispose();
     await this.#server?.close();
     this.#server = undefined;
     this.#options.state.clearRecord();
@@ -188,6 +198,10 @@ export class Daemon {
       pid: update.pid,
     });
 
+    if (update.status === 'working' || update.status === 'completed') {
+      this.#scheduler.cancel(update.sessionId, update.agent);
+    }
+
     this.#logger.debug('session updated', {
       sessionId: update.sessionId,
       status: update.status,
@@ -215,27 +229,32 @@ export class Daemon {
       priority: outcome.routed.priority,
     });
 
-    const notified = await this.#notify(outcome.routed);
+    const notified = await this.#scheduler.schedule(outcome.routed);
     return { accepted: true, duplicate: false, notified };
   }
 
-  async #notify(routed: Parameters<typeof buildNotification>[0]): Promise<boolean> {
-    const request = buildNotification(routed, this.#options.config.notifications);
-    if (request === undefined) return false;
+  #actionFor(agent: 'claude' | 'codex', sessionId: string) {
+    const terminalFocus = this.#options.terminalFocus;
+    if (terminalFocus === undefined) return undefined;
 
-    if (!this.#options.notifications.isAvailable()) {
-      this.#logger.warn('notification skipped', { reason: 'unavailable' });
-      return false;
-    }
+    const agentName = agent === 'claude' ? 'Claude' : 'Codex';
 
-    try {
-      await this.#options.notifications.notify(request);
-      this.#logger.debug('notification delivered', { priority: request.priority });
-      return true;
-    } catch (error) {
-      // Session tracking must survive a notification backend failure.
-      this.#logger.error('notification failed', { err: error });
-      return false;
-    }
+    return {
+      label: `Return to ${agentName}`,
+      onActivate: async () => {
+        const session = this.#options.sessions.get(sessionId, agent);
+        if (session === undefined) {
+          return {
+            handled: false,
+            message: 'This agent session is no longer tracked by PingBack.',
+          };
+        }
+
+        const result = await terminalFocus.focusTerminal(session);
+        return result.focused
+          ? { handled: true }
+          : { handled: false, message: result.message };
+      },
+    };
   }
 }

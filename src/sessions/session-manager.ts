@@ -29,7 +29,7 @@ function sessionKey(agent: AgentType, id: string): string {
 /**
  * Tracks one entry per agent session, keyed by a composite agent:sessionId.
  *
- * Sessions from different agents (e.g. Claude, Codex, AGY) running simultaneously
+ * Sessions from different agents (Claude and Codex) running simultaneously
  * never collide or overwrite each other.
  */
 export class SessionManager {

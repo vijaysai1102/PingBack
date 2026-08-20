@@ -4,6 +4,7 @@ import { ConfigManager } from '../config/config-manager.js';
 import { Daemon } from '../core/daemon.js';
 import { DaemonState } from '../core/daemon-state.js';
 import { createPlatform, type Platform } from '../platform/platform.js';
+import { createTerminalFocusService } from '../platform/terminal-focus.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import { FileSessionStore } from '../sessions/session-store.js';
 import type { NotificationService } from '../notifications/notification-service.js';
@@ -60,6 +61,7 @@ export function createDaemon(): CreateDaemonResult {
     logger,
     version: packageVersion(),
     adapters,
+    terminalFocus: createTerminalFocusService(platform),
     claudeConnected: () =>
       adapters.find((a) => a.name === 'claude')?.isConfigured() ?? false,
   });

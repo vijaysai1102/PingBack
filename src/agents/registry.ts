@@ -3,7 +3,6 @@ import type { AgentType } from '../core/types.js';
 import type { AgentAdapter } from './adapter.js';
 import { ClaudeAdapter } from './claude/adapter.js';
 import { CodexAdapter } from './codex/adapter.js';
-import { AGYAdapter } from './agy/adapter.js';
 
 export interface AgentRegistryOptions {
   host?: HostInfo;
@@ -14,11 +13,7 @@ export interface AgentRegistryOptions {
  */
 export function createAllAdapters(options: AgentRegistryOptions = {}): AgentAdapter[] {
   const adapterOptions = options.host !== undefined ? { host: options.host } : {};
-  return [
-    new ClaudeAdapter(adapterOptions),
-    new CodexAdapter(adapterOptions),
-    new AGYAdapter(adapterOptions),
-  ];
+  return [new ClaudeAdapter(adapterOptions), new CodexAdapter(adapterOptions)];
 }
 
 /**
@@ -34,7 +29,5 @@ export function getAdapter(
       return new ClaudeAdapter(adapterOptions);
     case 'codex':
       return new CodexAdapter(adapterOptions);
-    case 'agy':
-      return new AGYAdapter(adapterOptions);
   }
 }

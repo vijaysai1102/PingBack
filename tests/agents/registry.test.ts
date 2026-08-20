@@ -15,17 +15,12 @@ describe('Agent Registry', () => {
     const adapters = createAllAdapters({ host: mockHost });
     const names = adapters.map((a) => a.name);
 
-    expect(names).toEqual(['claude', 'codex', 'agy']);
-    expect(adapters.map((a) => a.displayName)).toEqual([
-      'Claude Code',
-      'Codex CLI',
-      'AGY CLI',
-    ]);
+    expect(names).toEqual(['claude', 'codex']);
+    expect(adapters.map((a) => a.displayName)).toEqual(['Claude Code', 'Codex CLI']);
   });
 
   it('gets specific adapter by name', () => {
     expect(getAdapter('claude', { host: mockHost }).displayName).toBe('Claude Code');
     expect(getAdapter('codex', { host: mockHost }).displayName).toBe('Codex CLI');
-    expect(getAdapter('agy', { host: mockHost }).displayName).toBe('AGY CLI');
   });
 });

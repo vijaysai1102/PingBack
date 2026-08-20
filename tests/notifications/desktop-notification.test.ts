@@ -119,6 +119,32 @@ describe('DesktopNotificationService', () => {
     expect(calls[0]?.sound).toBe(false);
   });
 
+  it('offers and runs the session-bound return action when its button is clicked', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const onActivate = vi.fn(() => Promise.resolve({ handled: true }));
+    const notifier: NotifierLike = {
+      notify(options, callback) {
+        calls.push(options);
+        callback(null, 'Return to Codex');
+        return undefined;
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+    const notification = {
+      ...request(),
+      action: { label: 'Return to Codex', onActivate },
+    } as NotificationRequest;
+
+    await service.notify(notification);
+
+    expect(calls[0]?.actions).toEqual(['Return to Codex']);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
   it('plays the attention sound for high priority', async () => {
     const sound = new RecordingSound();
     const { notifier } = fakeNotifier();
