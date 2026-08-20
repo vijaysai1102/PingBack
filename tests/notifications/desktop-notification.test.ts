@@ -119,13 +119,17 @@ describe('DesktopNotificationService', () => {
     expect(calls[0]?.sound).toBe(false);
   });
 
-  it('offers and runs the session-bound return action when its button is clicked', async () => {
+  it.each([
+    ['Return to Codex', 'a macOS action-button response'],
+    ['return to codex', 'a Windows-normalized action-button response'],
+    ['activate', 'a toast-body click response'],
+  ])('runs the return action for %s from %s', async (response) => {
     const calls: Record<string, unknown>[] = [];
     const onActivate = vi.fn(() => Promise.resolve({ handled: true }));
     const notifier: NotifierLike = {
       notify(options, callback) {
         calls.push(options);
-        callback(null, 'Return to Codex');
+        callback(null, response);
         return undefined;
       },
     };
