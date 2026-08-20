@@ -38,6 +38,20 @@ export function formatBody(request: NotificationRequest): string {
   return parts.filter((part) => part.length > 0).join('\n');
 }
 
+/**
+ * node-notifier preserves an action label on macOS but lowercases Windows
+ * toaster responses. A click on the toast body is reported as `activate`.
+ */
+function activatesAction(response: string | undefined, actionLabel: string): boolean {
+  if (response === undefined) return false;
+
+  const normalizedResponse = response.trim().toLocaleLowerCase();
+  return (
+    normalizedResponse === actionLabel.trim().toLocaleLowerCase() ||
+    normalizedResponse === 'activate'
+  );
+}
+
 export class DesktopNotificationService implements NotificationService {
   readonly #sound: SoundPlayer;
   readonly #logger: Logger;
@@ -78,7 +92,10 @@ export class DesktopNotificationService implements NotificationService {
       const done = (error: Error | null, response?: string): void => {
         if (error) this.#logger.warn('desktop notification failed', { err: error });
         else this.#logger.info('notification delivered', { priority: request.priority });
-        if (request.action !== undefined && response === request.action.label) {
+        if (
+          request.action !== undefined &&
+          activatesAction(response, request.action.label)
+        ) {
           void this.#activateAction(request.action);
         }
         resolve();
