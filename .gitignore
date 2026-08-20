@@ -7,3 +7,4 @@ assets/sounds/*.wav
 .DS_Store
 .eslintcache
 img/
+SPEC.md
