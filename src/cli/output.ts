@@ -28,10 +28,6 @@ export function warn(text: string): void {
   line(`${symbols.warn} ${text}`);
 }
 
-export function info(text: string): void {
-  line(`${symbols.idle} ${text}`);
-}
-
 export function failure(text: string): void {
   process.stderr.write(`${symbols.fail} ${text}\n`);
 }

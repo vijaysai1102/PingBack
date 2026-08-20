@@ -9,7 +9,7 @@ export type SoundName = 'attention' | 'completion' | 'error';
 
 export interface SoundPlayer {
   isAvailable(): boolean;
-  play(sound: SoundName, volume?: number): Promise<void>;
+  play(sound: SoundName): Promise<void>;
 }
 
 export interface SoundServiceOptions {
@@ -49,9 +49,7 @@ export class SoundService implements SoundPlayer {
     return existsSync(this.#resolveFile('attention'));
   }
 
-  async play(sound: SoundName, volume?: number): Promise<void> {
-    if (volume !== undefined && volume <= 0) return;
-
+  async play(sound: SoundName): Promise<void> {
     const file = this.#resolveFile(sound);
 
     if (!existsSync(file)) {

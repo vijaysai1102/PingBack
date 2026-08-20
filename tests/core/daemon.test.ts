@@ -6,7 +6,7 @@ import { Daemon } from '../../src/core/daemon.js';
 import { DaemonState } from '../../src/core/daemon-state.js';
 import { SessionManager } from '../../src/sessions/session-manager.js';
 import { createPlatform, type Platform } from '../../src/platform/platform.js';
-import { silentLogger, type Logger } from '../../src/utils/logger.js';
+import { silentLogger } from '../../src/utils/logger.js';
 import { DEFAULT_CONFIG, type PingBackConfig } from '../../src/config/config-manager.js';
 import type {
   NotificationRequest,
@@ -41,41 +41,23 @@ const platform: Platform = createPlatform({
   uid: '501',
 });
 
-const ZERO_DELAY_EVENTS = {
-  attention_required: { delaySeconds: 0, sound: true, desktop: true },
-  question: { delaySeconds: 0, sound: true, desktop: true },
-  error: { delaySeconds: 0, sound: true, desktop: true },
-  task_completed: { delaySeconds: 0, sound: false, desktop: true },
-};
-
 function makeDaemon(
   overrides: {
     notifier?: NotificationService;
-    config?: Partial<PingBackConfig>;
+    config?: PingBackConfig;
     claudeConnected?: () => boolean;
-    logger?: Logger;
   } = {},
 ): { daemon: Daemon; sessions: SessionManager; notifier: RecordingNotifier } {
   const notifier = (overrides.notifier ?? new RecordingNotifier()) as RecordingNotifier;
   const sessions = new SessionManager({ now: () => clock });
 
-  const config: PingBackConfig = {
-    ...DEFAULT_CONFIG,
-    ...overrides.config,
-    notifications: {
-      ...DEFAULT_CONFIG.notifications,
-      ...overrides.config?.notifications,
-      events: overrides.config?.notifications?.events ?? ZERO_DELAY_EVENTS,
-    },
-  };
-
   const daemon = new Daemon({
     platform,
-    config,
+    config: overrides.config ?? DEFAULT_CONFIG,
     sessions,
     notifications: notifier,
     state: new DaemonState(dir),
-    logger: overrides.logger ?? silentLogger(),
+    logger: silentLogger(),
     version: '0.1.0',
     now: () => clock,
     ...(overrides.claudeConnected === undefined
@@ -126,26 +108,10 @@ describe('Daemon.ingest', () => {
     expect(sessions.get('session-a')?.status).toBe('waiting');
   });
 
-  it('delivers an attention notification without a return action', async () => {
-    const { daemon, notifier } = makeDaemon();
-
-    await daemon.ingest(
-      eventPayload({
-        id: 'e-codex',
-        agent: 'codex',
-        sessionId: 'codex-42',
-        pid: 4242,
-        cwd: 'C:\\code\\api',
-      }),
-    );
-
-    expect(notifier.sent[0]).not.toHaveProperty('action');
-  });
-
   it('rejects a malformed event', async () => {
     const { daemon } = makeDaemon();
 
-    await expect(daemon.ingest({ agent: 'unsupported' })).rejects.toThrow(/unsupported/);
+    await expect(daemon.ingest({ agent: 'codex' })).rejects.toThrow(/codex/);
     await expect(daemon.ingest('garbage')).rejects.toThrow();
   });
 
@@ -175,14 +141,7 @@ describe('Daemon.ingest', () => {
 
   it('honours the desktop:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: {
-        notifications: {
-          desktop: false,
-          sound: true,
-          volume: 1.0,
-          events: ZERO_DELAY_EVENTS,
-        },
-      },
+      config: { notifications: { desktop: false, sound: true }, logLevel: 'info' },
     });
     const ack = await daemon.ingest(eventPayload({ id: 'e1' }));
 
@@ -192,14 +151,7 @@ describe('Daemon.ingest', () => {
 
   it('honours the sound:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: {
-        notifications: {
-          desktop: true,
-          sound: false,
-          volume: 1.0,
-          events: ZERO_DELAY_EVENTS,
-        },
-      },
+      config: { notifications: { desktop: true, sound: false }, logLevel: 'info' },
     });
     await daemon.ingest(eventPayload({ id: 'e1' }));
 

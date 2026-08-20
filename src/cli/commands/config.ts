@@ -19,21 +19,8 @@ export function runConfigList(): void {
 
   line('PINGBACK CONFIG');
   line('');
-  line('General');
-  line('────────────────────────────────');
-  line(`notifications.desktop = ${String(config.notifications.desktop)}`);
-  line(`notifications.sound = ${String(config.notifications.sound)}`);
-  line(`notifications.volume = ${String(config.notifications.volume)}`);
-  line(`logLevel = ${config.logLevel}`);
-  line('');
-  line('Grace Periods & Event Rules');
-  line('────────────────────────────────');
-  for (const [event, rules] of Object.entries(config.notifications.events)) {
-    const soundLabel = rules.sound ? 'ON' : 'OFF';
-    const desktopLabel = rules.desktop ? 'ON' : 'OFF';
-    line(
-      `${event}: ${rules.delaySeconds}s grace period | Sound: ${soundLabel} | Desktop: ${desktopLabel}`,
-    );
+  for (const key of CONFIG_KEYS) {
+    line(`${key} = ${String(getConfigValue(config, key))}`);
   }
   line('');
   line(configManager.filePath);

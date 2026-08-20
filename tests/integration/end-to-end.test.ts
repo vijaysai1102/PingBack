@@ -67,23 +67,10 @@ beforeEach(async () => {
   notifier = new RecordingNotifier();
   sessions = new SessionManager({ store: new FileSessionStore(dir) });
 
-  const zeroDelayEvents = {
-    attention_required: { delaySeconds: 0, sound: true, desktop: true },
-    question: { delaySeconds: 0, sound: true, desktop: true },
-    error: { delaySeconds: 0, sound: true, desktop: true },
-    task_completed: { delaySeconds: 0, sound: false, desktop: true },
-  };
-
   const state = new DaemonState(dir);
   daemon = new Daemon({
     platform,
-    config: {
-      ...DEFAULT_CONFIG,
-      notifications: {
-        ...DEFAULT_CONFIG.notifications,
-        events: zeroDelayEvents,
-      },
-    },
+    config: DEFAULT_CONFIG,
     sessions,
     notifications: notifier,
     state,
@@ -141,7 +128,7 @@ describe('the PingBack v0.1 target scenario', () => {
     const rendered = formatRunningStatus(status, Date.now());
     expect(rendered).toContain('Project: finbot');
     expect(rendered).toContain('Status: Waiting');
-    expect(rendered).toContain('1 needs your attention');
+    expect(rendered).toContain('1 session needs your attention.');
 
     // The developer returns and answers; Claude goes back to work.
     await fireHook(
@@ -231,7 +218,9 @@ describe('the PingBack v0.1 target scenario', () => {
     expect(notifier.sent.map((n) => n.project)).toEqual(['alpha', 'beta', 'gamma']);
 
     const status = (await sendRequest({ endpoint, token }, 'status')) as DaemonStatus;
-    expect(formatRunningStatus(status, Date.now())).toContain('3 need your attention');
+    expect(formatRunningStatus(status, Date.now())).toContain(
+      '3 sessions need your attention.',
+    );
   });
 
   it('raises a single notification when a hook fires twice', async () => {
@@ -251,10 +240,7 @@ describe('the PingBack v0.1 target scenario', () => {
 
   it('rejects a malformed event without disturbing the daemon', async () => {
     await expect(
-      sendRequest({ endpoint, token }, 'event', {
-        agent: 'unsupported',
-        sessionId: 'x',
-      }),
+      sendRequest({ endpoint, token }, 'event', { agent: 'codex', sessionId: 'x' }),
     ).rejects.toThrow();
 
     // The daemon is still healthy and still serving.

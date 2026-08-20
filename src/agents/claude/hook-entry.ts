@@ -55,14 +55,14 @@ export async function runHook(): Promise<void> {
   const normalized = normalizeHookPayload(payload);
   if (normalized.kind === 'ignored') return;
 
-  const platform = createPlatform();
-  const client = new DaemonClient(platform, IPC_TIMEOUT_MS);
+  const client = new DaemonClient(createPlatform(), IPC_TIMEOUT_MS);
 
   // Hook payloads carry no process id. Claude Code spawns this bridge directly
   // (exec form, no intervening shell), so the parent process is the Claude
   // session itself. Treated as best-effort diagnostic data only: session
   // identity always comes from session_id.
   const pid = claudeProcessId();
+
   if (normalized.kind === 'session') {
     await client.sendSessionUpdate({ ...normalized.update, pid });
     return;

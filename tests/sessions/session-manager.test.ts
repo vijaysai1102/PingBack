@@ -190,37 +190,21 @@ describe('SessionManager.list', () => {
   });
 });
 
-describe('SessionManager multi-agent simultaneous isolation', () => {
-  it('isolates sessions from different agents even if they share session ids', () => {
+describe('SessionManager.remove and clear', () => {
+  it('removes a known session and reports unknown ones', () => {
     const sessions = new SessionManager({ now });
+    sessions.applyEvent(event());
 
-    sessions.applyEvent(
-      event({ agent: 'claude', sessionId: 'shared-id', cwd: '/proj-claude' }),
-    );
-    sessions.applyEvent(
-      event({ agent: 'codex', sessionId: 'shared-id', cwd: '/proj-codex' }),
-    );
-
-    expect(sessions.size).toBe(2);
-
-    const claude = sessions.get('shared-id', 'claude');
-    const codex = sessions.get('shared-id', 'codex');
-    expect(claude?.agent).toBe('claude');
-    expect(claude?.cwd).toBe('/proj-claude');
-
-    expect(codex?.agent).toBe('codex');
-    expect(codex?.cwd).toBe('/proj-codex');
+    expect(sessions.remove('session-a')).toBe(true);
+    expect(sessions.remove('missing')).toBe(false);
   });
 
-  it('records agent type on touch', () => {
+  it('clears every session', () => {
     const sessions = new SessionManager({ now });
-    const codexSession = sessions.touch('codex-1', 'working', {
-      agent: 'codex',
-      cwd: '/codex-proj',
-    });
+    sessions.applyEvent(event({ sessionId: 'a' }));
+    sessions.applyEvent(event({ sessionId: 'b' }));
+    sessions.clear();
 
-    expect(codexSession.agent).toBe('codex');
-    expect(codexSession.status).toBe('working');
-    expect(sessions.get('codex-1', 'codex')?.cwd).toBe('/codex-proj');
+    expect(sessions.size).toBe(0);
   });
 });
