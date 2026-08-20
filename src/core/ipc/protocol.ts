@@ -1,4 +1,4 @@
-import type { AgentSession } from '../types.js';
+import type { AgentSession, AgentType } from '../types.js';
 import type { PlatformId } from '../../platform/platform.js';
 
 export const IPC_REQUEST_TYPES = [
@@ -18,12 +18,20 @@ export interface IpcRequest {
   payload?: unknown;
 }
 
+export interface AgentStatusInfo {
+  name: AgentType;
+  displayName: string;
+  configured: boolean;
+  installed: boolean;
+}
+
 export interface DaemonStatus {
   pid: number;
   version: string;
   startedAt: number;
   platform: PlatformId;
   claudeConnected: boolean;
+  agents?: AgentStatusInfo[] | undefined;
   sessions: AgentSession[];
 }
 

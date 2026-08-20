@@ -111,7 +111,7 @@ describe('Daemon.ingest', () => {
   it('rejects a malformed event', async () => {
     const { daemon } = makeDaemon();
 
-    await expect(daemon.ingest({ agent: 'codex' })).rejects.toThrow(/codex/);
+    await expect(daemon.ingest({ agent: 'unsupported' })).rejects.toThrow(/unsupported/);
     await expect(daemon.ingest('garbage')).rejects.toThrow();
   });
 

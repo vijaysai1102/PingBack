@@ -52,7 +52,10 @@ export function normalizeCodexHookPayload(
   switch (normalizedEventName) {
     case 'userpromptsubmit':
     case 'user_prompt_submit':
-      return { kind: 'session', update: { sessionId, status: 'working', cwd } };
+      return {
+        kind: 'session',
+        update: { sessionId, status: 'working', cwd, agent: 'codex' },
+      };
 
     case 'stop': {
       const error = str(payload.error) ?? str(payload.error_details);

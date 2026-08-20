@@ -87,33 +87,59 @@ describe('formatRunningStatus', () => {
     expect(output).toContain('Waiting: 42s');
   });
 
+  it('renders multi-agent configuration block when agents are provided', () => {
+    const output = formatRunningStatus(
+      status([], {
+        agents: [
+          {
+            name: 'claude',
+            displayName: 'Claude Code',
+            configured: true,
+            installed: true,
+          },
+          { name: 'codex', displayName: 'Codex CLI', configured: true, installed: true },
+          { name: 'agy', displayName: 'AGY CLI', configured: false, installed: true },
+        ],
+      }),
+      NOW,
+    );
+
+    expect(output).toContain('Agents');
+    expect(output).toContain('Claude Code:');
+    expect(output).toContain('Codex CLI:');
+    expect(output).toContain('AGY CLI:');
+  });
+
   it('counts a single session needing attention', () => {
     const output = formatRunningStatus(
       status([{ id: 's1', agent: 'claude', status: 'waiting', startedAt: NOW }]),
       NOW,
     );
 
-    expect(output).toContain('1 session needs your attention.');
+    expect(output).toContain('1 active session');
+    expect(output).toContain('1 needs your attention');
   });
 
   it('counts several sessions needing attention', () => {
     const output = formatRunningStatus(
       status([
         { id: 's1', agent: 'claude', status: 'waiting', startedAt: NOW },
-        { id: 's2', agent: 'claude', status: 'error', startedAt: NOW },
+        { id: 's2', agent: 'codex', status: 'error', startedAt: NOW },
       ]),
       NOW,
     );
 
-    expect(output).toContain('2 sessions need your attention.');
+    expect(output).toContain('2 active sessions');
+    expect(output).toContain('2 need your attention');
   });
 
   it('says nothing needs attention when all sessions are calm', () => {
     const output = formatRunningStatus(
-      status([{ id: 's1', agent: 'claude', status: 'working', startedAt: NOW }]),
+      status([{ id: 's1', agent: 'agy', status: 'working', startedAt: NOW }]),
       NOW,
     );
 
+    expect(output).toContain('1 active session');
     expect(output).toContain('Nothing needs your attention.');
   });
 

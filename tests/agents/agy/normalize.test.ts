@@ -21,6 +21,7 @@ describe('normalizeAGYHookPayload: PreInvocation', () => {
         sessionId: 'agy-conv-123',
         status: 'working',
         cwd: '/Users/dev/myproject',
+        agent: 'agy',
       },
     });
   });

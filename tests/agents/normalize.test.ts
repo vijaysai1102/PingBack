@@ -175,7 +175,12 @@ describe('normalizeHookPayload: session state', () => {
 
     expect(result).toEqual({
       kind: 'session',
-      update: { sessionId: 'abc', status: 'working', cwd: '/proj' },
+      update: {
+        sessionId: 'abc',
+        status: 'working',
+        cwd: '/proj',
+        agent: 'claude',
+      },
     });
   });
 

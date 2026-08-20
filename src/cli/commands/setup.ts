@@ -1,4 +1,5 @@
-import { ClaudeAdapter } from '../../agents/claude/adapter.js';
+import { createAllAdapters } from '../../agents/registry.js';
+import type { AgentAdapter } from '../../agents/adapter.js';
 import { ConfigManager } from '../../config/config-manager.js';
 import {
   createPlatform,
@@ -7,7 +8,7 @@ import {
 } from '../../platform/platform.js';
 import { SoundService } from '../../notifications/sound-service.js';
 import { PingBackError, UnsupportedPlatformError } from '../../utils/errors.js';
-import { banner, line, success, warn } from '../output.js';
+import { banner, info, line, success, warn } from '../output.js';
 import { startDaemon } from './start.js';
 
 export async function runSetup(): Promise<void> {
@@ -27,21 +28,35 @@ export async function runSetup(): Promise<void> {
   success(`${platform.displayName} detected`);
   success(`Node.js ${process.version} detected`);
 
-  const claude = new ClaudeAdapter({ host });
-  const detection = claude.detect();
-
-  if (!detection.installed) {
-    throw new PingBackError('Claude Code was not detected.', {
-      code: 'CLAUDE_NOT_FOUND',
-      hint: 'Install Claude Code and run:\n\n    pingback setup',
-    });
-  }
-  success('Claude Code detected');
+  const adapters = createAllAdapters({ host });
+  const installedAdapters: AgentAdapter[] = [];
 
   line('');
-  line('Setting up Claude Code integration...');
-  claude.setup();
-  success('Done');
+  line('Scanning for supported agents...');
+
+  for (const adapter of adapters) {
+    const detection = adapter.detect();
+    if (detection.installed) {
+      success(`${adapter.displayName} detected`);
+      installedAdapters.push(adapter);
+    } else {
+      info(`${adapter.displayName} not installed`);
+    }
+  }
+
+  if (installedAdapters.length === 0) {
+    throw new PingBackError('No supported coding agents were detected.', {
+      code: 'NO_AGENTS_FOUND',
+      hint: 'Install Claude Code, Codex CLI, or AGY CLI and run:\n\n    pingback setup',
+    });
+  }
+
+  line('');
+  line('Configuring agent integrations...');
+  for (const adapter of installedAdapters) {
+    adapter.setup();
+    success(adapter.displayName);
+  }
 
   line('');
   line('Setting up notifications...');
@@ -70,18 +85,33 @@ export async function runSetup(): Promise<void> {
   line('');
   line('PingBack is ready.');
   line('');
-  line('You can use Claude Code normally.');
-  line("We'll notify you when Claude needs your attention.");
+  line('Active agent integrations:');
+  for (const adapter of installedAdapters) {
+    line(`  - ${adapter.displayName}`);
+  }
   line('');
-  line('Note: restart any Claude Code sessions that are already open.');
+  line("We'll notify you when your agents need your attention.");
+  line('');
+  line('Note: restart any agent sessions that are already open.');
 }
 
 export function runUninstall(): void {
   const host = readHostInfo();
-  const claude = new ClaudeAdapter({ host });
+  const adapters = createAllAdapters({ host });
 
-  claude.uninstall();
-  success('Claude Code integration removed.');
+  let removedCount = 0;
+  for (const adapter of adapters) {
+    if (adapter.isConfigured()) {
+      adapter.uninstall();
+      success(`${adapter.displayName} integration removed.`);
+      removedCount += 1;
+    }
+  }
+
+  if (removedCount === 0) {
+    info('No active agent integrations found.');
+  }
+
   line('');
   line('Stop the background daemon with:');
   line('');

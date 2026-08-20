@@ -128,7 +128,7 @@ describe('the PingBack v0.1 target scenario', () => {
     const rendered = formatRunningStatus(status, Date.now());
     expect(rendered).toContain('Project: finbot');
     expect(rendered).toContain('Status: Waiting');
-    expect(rendered).toContain('1 session needs your attention.');
+    expect(rendered).toContain('1 needs your attention');
 
     // The developer returns and answers; Claude goes back to work.
     await fireHook(
@@ -218,9 +218,7 @@ describe('the PingBack v0.1 target scenario', () => {
     expect(notifier.sent.map((n) => n.project)).toEqual(['alpha', 'beta', 'gamma']);
 
     const status = (await sendRequest({ endpoint, token }, 'status')) as DaemonStatus;
-    expect(formatRunningStatus(status, Date.now())).toContain(
-      '3 sessions need your attention.',
-    );
+    expect(formatRunningStatus(status, Date.now())).toContain('3 need your attention');
   });
 
   it('raises a single notification when a hook fires twice', async () => {
@@ -240,7 +238,10 @@ describe('the PingBack v0.1 target scenario', () => {
 
   it('rejects a malformed event without disturbing the daemon', async () => {
     await expect(
-      sendRequest({ endpoint, token }, 'event', { agent: 'codex', sessionId: 'x' }),
+      sendRequest({ endpoint, token }, 'event', {
+        agent: 'unsupported',
+        sessionId: 'x',
+      }),
     ).rejects.toThrow();
 
     // The daemon is still healthy and still serving.

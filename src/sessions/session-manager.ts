@@ -1,4 +1,9 @@
-import type { AgentEvent, AgentSession, SessionStatus } from '../core/types.js';
+import type {
+  AgentEvent,
+  AgentSession,
+  AgentType,
+  SessionStatus,
+} from '../core/types.js';
 import { statusForEvent } from '../core/types.js';
 import { MemorySessionStore, type SessionStore } from './session-store.js';
 
@@ -17,11 +22,15 @@ const DEFAULT_COMPLETED_TTL_MS = 60 * 60 * 1000; // 1 hour
 const DEFAULT_STALE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 const DEFAULT_MAX_SESSIONS = 200;
 
+function sessionKey(agent: AgentType, id: string): string {
+  return `${agent}:${id}`;
+}
+
 /**
- * Tracks one entry per agent session, keyed by the agent's own session id.
+ * Tracks one entry per agent session, keyed by a composite agent:sessionId.
  *
- * Sessions are keyed by id rather than by process or directory so that several
- * concurrent Claude sessions in different projects never collapse into one.
+ * Sessions from different agents (e.g. Claude, Codex, AGY) running simultaneously
+ * never collide or overwrite each other.
  */
 export class SessionManager {
   readonly #sessions = new Map<string, AgentSession>();
@@ -39,7 +48,7 @@ export class SessionManager {
     this.#maxSessions = options.maxSessions ?? DEFAULT_MAX_SESSIONS;
 
     for (const session of this.#store.load()) {
-      this.#sessions.set(session.id, session);
+      this.#sessions.set(sessionKey(session.agent, session.id), session);
     }
   }
 
@@ -47,9 +56,18 @@ export class SessionManager {
     return [...this.#sessions.values()].sort((a, b) => b.startedAt - a.startedAt);
   }
 
-  get(id: string): AgentSession | undefined {
-    const session = this.#sessions.get(id);
-    return session === undefined ? undefined : { ...session };
+  get(id: string, agent?: AgentType): AgentSession | undefined {
+    if (agent !== undefined) {
+      const session = this.#sessions.get(sessionKey(agent, id));
+      return session === undefined ? undefined : { ...session };
+    }
+
+    // Lookup by raw id across agents
+    for (const session of this.#sessions.values()) {
+      if (session.id === id) return { ...session };
+    }
+
+    return undefined;
   }
 
   get size(): number {
@@ -58,7 +76,8 @@ export class SessionManager {
 
   /** Creates or updates the session implied by an event. */
   applyEvent(event: AgentEvent): AgentSession {
-    const existing = this.#sessions.get(event.sessionId);
+    const key = sessionKey(event.agent, event.sessionId);
+    const existing = this.#sessions.get(key);
     const status = statusForEvent(event.type);
 
     const session: AgentSession = existing
@@ -80,7 +99,7 @@ export class SessionManager {
           metadata: undefined,
         };
 
-    this.#sessions.set(session.id, session);
+    this.#sessions.set(key, session);
     this.#enforceLimit();
     this.#persist();
     return { ...session };
@@ -90,10 +109,16 @@ export class SessionManager {
   touch(
     sessionId: string,
     status: SessionStatus,
-    details: { cwd?: string | undefined; pid?: number | undefined } = {},
+    details: {
+      agent?: AgentType | undefined;
+      cwd?: string | undefined;
+      pid?: number | undefined;
+    } = {},
   ): AgentSession {
     const now = this.#now();
-    const existing = this.#sessions.get(sessionId);
+    const agent = details.agent ?? 'claude';
+    const key = sessionKey(agent, sessionId);
+    const existing = this.#sessions.get(key);
 
     const session: AgentSession = existing
       ? {
@@ -105,7 +130,7 @@ export class SessionManager {
         }
       : {
           id: sessionId,
-          agent: 'claude',
+          agent,
           status,
           startedAt: now,
           lastActivityAt: now,
@@ -114,14 +139,26 @@ export class SessionManager {
           metadata: undefined,
         };
 
-    this.#sessions.set(sessionId, session);
+    this.#sessions.set(key, session);
     this.#enforceLimit();
     this.#persist();
     return { ...session };
   }
 
-  remove(id: string): boolean {
-    const removed = this.#sessions.delete(id);
+  remove(id: string, agent?: AgentType): boolean {
+    if (agent !== undefined) {
+      const removed = this.#sessions.delete(sessionKey(agent, id));
+      if (removed) this.#persist();
+      return removed;
+    }
+
+    let removed = false;
+    for (const [key, session] of this.#sessions) {
+      if (session.id === id) {
+        this.#sessions.delete(key);
+        removed = true;
+      }
+    }
     if (removed) this.#persist();
     return removed;
   }
@@ -136,13 +173,13 @@ export class SessionManager {
     const now = this.#now();
     let removed = 0;
 
-    for (const [id, session] of this.#sessions) {
+    for (const [key, session] of this.#sessions) {
       const last = session.lastActivityAt ?? session.startedAt;
       const age = now - last;
       const isFinished = session.status === 'completed';
 
       if ((isFinished && age > this.#completedTtlMs) || age > this.#staleTtlMs) {
-        this.#sessions.delete(id);
+        this.#sessions.delete(key);
         removed += 1;
       }
     }
@@ -160,7 +197,9 @@ export class SessionManager {
     const excess = this.#sessions.size - this.#maxSessions;
     for (let i = 0; i < excess; i += 1) {
       const victim = ordered[i];
-      if (victim !== undefined) this.#sessions.delete(victim.id);
+      if (victim !== undefined) {
+        this.#sessions.delete(sessionKey(victim.agent, victim.id));
+      }
     }
   }
 

@@ -190,21 +190,45 @@ describe('SessionManager.list', () => {
   });
 });
 
-describe('SessionManager.remove and clear', () => {
-  it('removes a known session and reports unknown ones', () => {
+describe('SessionManager multi-agent simultaneous isolation', () => {
+  it('isolates sessions from different agents even if they share session ids', () => {
     const sessions = new SessionManager({ now });
-    sessions.applyEvent(event());
 
-    expect(sessions.remove('session-a')).toBe(true);
-    expect(sessions.remove('missing')).toBe(false);
+    sessions.applyEvent(
+      event({ agent: 'claude', sessionId: 'shared-id', cwd: '/proj-claude' }),
+    );
+    sessions.applyEvent(
+      event({ agent: 'codex', sessionId: 'shared-id', cwd: '/proj-codex' }),
+    );
+    sessions.applyEvent(
+      event({ agent: 'agy', sessionId: 'shared-id', cwd: '/proj-agy' }),
+    );
+
+    expect(sessions.size).toBe(3);
+
+    const claude = sessions.get('shared-id', 'claude');
+    const codex = sessions.get('shared-id', 'codex');
+    const agy = sessions.get('shared-id', 'agy');
+
+    expect(claude?.agent).toBe('claude');
+    expect(claude?.cwd).toBe('/proj-claude');
+
+    expect(codex?.agent).toBe('codex');
+    expect(codex?.cwd).toBe('/proj-codex');
+
+    expect(agy?.agent).toBe('agy');
+    expect(agy?.cwd).toBe('/proj-agy');
   });
 
-  it('clears every session', () => {
+  it('records agent type on touch', () => {
     const sessions = new SessionManager({ now });
-    sessions.applyEvent(event({ sessionId: 'a' }));
-    sessions.applyEvent(event({ sessionId: 'b' }));
-    sessions.clear();
+    const codexSession = sessions.touch('codex-1', 'working', {
+      agent: 'codex',
+      cwd: '/codex-proj',
+    });
 
-    expect(sessions.size).toBe(0);
+    expect(codexSession.agent).toBe('codex');
+    expect(codexSession.status).toBe('working');
+    expect(sessions.get('codex-1', 'codex')?.cwd).toBe('/codex-proj');
   });
 });

@@ -55,7 +55,10 @@ export function normalizeAGYHookPayload(
 
   switch (hookEvent) {
     case 'PreInvocation':
-      return { kind: 'session', update: { sessionId, status: 'working', cwd } };
+      return {
+        kind: 'session',
+        update: { sessionId, status: 'working', cwd, agent: 'agy' },
+      };
 
     case 'PreToolUse': {
       const toolName = str(payload.toolCall?.name);

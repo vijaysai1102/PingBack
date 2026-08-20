@@ -7,8 +7,9 @@ import type { SessionManager } from '../sessions/session-manager.js';
 import type { DaemonState } from './daemon-state.js';
 import { EventRouter } from './event-router.js';
 import { parseAgentEvent, parseSessionUpdate } from './event-schema.js';
+import type { AgentAdapter } from '../agents/adapter.js';
 import { IpcServer } from './ipc/server.js';
-import type { DaemonStatus, IpcRequest } from './ipc/protocol.js';
+import type { AgentStatusInfo, DaemonStatus, IpcRequest } from './ipc/protocol.js';
 
 export interface DaemonOptions {
   platform: Platform;
@@ -18,7 +19,8 @@ export interface DaemonOptions {
   state: DaemonState;
   logger: Logger;
   version: string;
-  /** Reports whether the Claude integration is currently installed. */
+  adapters?: AgentAdapter[] | undefined;
+  /** Reports whether the Claude integration is currently installed (legacy). */
   claudeConnected?: () => boolean;
   pruneIntervalMs?: number;
   now?: () => number;
@@ -146,13 +148,32 @@ export class Daemon {
   }
 
   status(): DaemonStatus {
-    const { platform, version, claudeConnected } = this.#options;
+    const { platform, version, claudeConnected, adapters } = this.#options;
+    const agentStatuses: AgentStatusInfo[] | undefined =
+      adapters !== undefined
+        ? adapters.map((adapter) => {
+            const detection = adapter.detect();
+            return {
+              name: adapter.name,
+              displayName: adapter.displayName,
+              configured: adapter.isConfigured(),
+              installed: detection.installed,
+            };
+          })
+        : undefined;
+
+    const legacyClaude =
+      claudeConnected?.() ??
+      agentStatuses?.find((a) => a.name === 'claude')?.configured ??
+      false;
+
     return {
       pid: process.pid,
       version,
       startedAt: this.#startedAt,
       platform: platform.id,
-      claudeConnected: claudeConnected?.() ?? false,
+      claudeConnected: legacyClaude,
+      agents: agentStatuses,
       sessions: this.#options.sessions.list(),
     };
   }
@@ -162,6 +183,7 @@ export class Daemon {
     const update = parseSessionUpdate(payload);
 
     this.#options.sessions.touch(update.sessionId, update.status, {
+      agent: update.agent,
       cwd: update.cwd,
       pid: update.pid,
     });

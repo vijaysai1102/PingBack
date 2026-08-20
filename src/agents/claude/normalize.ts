@@ -137,9 +137,15 @@ export function normalizeHookPayload(
 
     case 'SessionStart':
     case 'UserPromptSubmit':
-      return { kind: 'session', update: { sessionId, status: 'working', cwd } };
+      return {
+        kind: 'session',
+        update: { sessionId, status: 'working', cwd, agent: 'claude' },
+      };
 
     case 'SessionEnd':
-      return { kind: 'session', update: { sessionId, status: 'completed', cwd } };
+      return {
+        kind: 'session',
+        update: { sessionId, status: 'completed', cwd, agent: 'claude' },
+      };
   }
 }

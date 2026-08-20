@@ -22,6 +22,7 @@ describe('normalizeCodexHookPayload: UserPromptSubmit', () => {
         sessionId: 'codex-sess-1',
         status: 'working',
         cwd: '/path/to/project',
+        agent: 'codex',
       },
     });
   });
