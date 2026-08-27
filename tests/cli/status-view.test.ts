@@ -108,6 +108,20 @@ describe('formatRunningStatus', () => {
     expect(output).toContain('2 sessions need your attention.');
   });
 
+  it('summarizes the active session total alongside attention needs', () => {
+    const output = formatRunningStatus(
+      status([
+        { id: 's1', agent: 'claude', status: 'working', startedAt: NOW },
+        { id: 's2', agent: 'claude', status: 'waiting', startedAt: NOW },
+        { id: 's3', agent: 'claude', status: 'completed', startedAt: NOW },
+      ]),
+      NOW,
+    );
+
+    expect(output).toContain('3 active sessions');
+    expect(output).toContain('1 session needs your attention.');
+  });
+
   it('says nothing needs attention when all sessions are calm', () => {
     const output = formatRunningStatus(
       status([{ id: 's1', agent: 'claude', status: 'working', startedAt: NOW }]),

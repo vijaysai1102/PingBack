@@ -1,11 +1,16 @@
 import { ClaudeAdapter } from '../../agents/claude/adapter.js';
+import {
+  detectAvailableEditors,
+  formatAvailableEditors,
+} from '../../applications/editor-availability.js';
 import { ConfigManager } from '../../config/config-manager.js';
 import {
   createPlatform,
   isSupportedPlatform,
   readHostInfo,
 } from '../../platform/platform.js';
-import { SoundService } from '../../notifications/sound-service.js';
+import { NullSoundPlayer, SoundService } from '../../notifications/sound-service.js';
+import { DesktopNotificationService } from '../../notifications/desktop-notification.js';
 import { PingBackError, UnsupportedPlatformError } from '../../utils/errors.js';
 import { banner, line, success, warn } from '../output.js';
 import { startDaemon } from './start.js';
@@ -38,6 +43,17 @@ export async function runSetup(): Promise<void> {
   }
   success('Claude Code detected');
 
+  const desktopNotifications = new DesktopNotificationService({
+    sound: new NullSoundPlayer(),
+  });
+  if (desktopNotifications.isAvailable()) {
+    success('Desktop notifications available');
+  } else {
+    warn(
+      'Desktop notifications are unavailable; PingBack will continue tracking sessions.',
+    );
+  }
+
   line('');
   line('Setting up Claude Code integration...');
   claude.setup();
@@ -60,6 +76,15 @@ export async function runSetup(): Promise<void> {
     success('Done');
   } else {
     warn('Notification sounds are unavailable; PingBack will notify silently.');
+  }
+
+  line('');
+  line('Checking supported editors...');
+  const editors = await detectAvailableEditors(platform.id);
+  if (editors.length === 0) {
+    warn(formatAvailableEditors(editors));
+  } else {
+    success(formatAvailableEditors(editors));
   }
 
   line('');

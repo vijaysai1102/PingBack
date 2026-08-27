@@ -69,6 +69,8 @@ export function formatRunningStatus(status: DaemonStatus, now: number): string {
   }
 
   const attention = status.sessions.filter(needsAttention).length;
+  const total = status.sessions.length;
+  lines.push(`${String(total)} active session${total === 1 ? '' : 's'}`);
   if (attention === 1) lines.push('1 session needs your attention.');
   else if (attention > 1)
     lines.push(`${String(attention)} sessions need your attention.`);

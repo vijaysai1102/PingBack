@@ -99,4 +99,46 @@ describe('associateProjectApplication', () => {
       }),
     ).resolves.toBe(false);
   });
+
+  it('keeps three session projects associated with distinct editor targets', async () => {
+    const service = new ProjectApplicationFocusService(
+      {
+        discover: () =>
+          Promise.resolve([
+            {
+              id: 'visual-studio-code',
+              name: 'Visual Studio Code',
+              projectPaths: ['/Users/dev/finbot'],
+              processId: 101,
+            },
+            {
+              id: 'cursor',
+              name: 'Cursor',
+              projectPaths: ['/Users/dev/pingback'],
+              processId: 202,
+            },
+            {
+              id: 'visual-studio-code',
+              name: 'Visual Studio Code',
+              projectPaths: ['/Users/dev/other'],
+              processId: 303,
+            },
+          ]),
+        focus: () => Promise.resolve(true),
+      },
+      'macos',
+    );
+
+    const [finbot, pingback, other, unmatched] = await Promise.all([
+      service.detectApplication(session('/Users/dev/finbot')),
+      service.detectApplication({ ...session('/Users/dev/pingback'), id: 'session-b' }),
+      service.detectApplication({ ...session('/Users/dev/other'), id: 'session-c' }),
+      service.detectApplication({ ...session('/Users/dev/missing'), id: 'session-d' }),
+    ]);
+
+    expect(finbot?.processId).toBe(101);
+    expect(pingback?.processId).toBe(202);
+    expect(other?.processId).toBe(303);
+    expect(unmatched).toBeUndefined();
+  });
 });

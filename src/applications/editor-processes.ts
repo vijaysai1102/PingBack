@@ -14,6 +14,12 @@ const EDITORS: Record<string, Omit<ApplicationInfo, 'projectPaths'>> = {
   cursor: { id: 'cursor', name: 'Cursor' },
 };
 
+export function editorForExecutable(
+  executable: string,
+): Omit<ApplicationInfo, 'projectPaths'> | undefined {
+  return EDITORS[executable.toLowerCase()];
+}
+
 function comparable(value: string, platform: PlatformId): string {
   const normalized = value.replace(/\\/g, '/');
   return platform === 'windows' ? normalized.toLowerCase() : normalized;
@@ -33,7 +39,7 @@ export function editorsForProject(
   const applications: ApplicationInfo[] = [];
 
   for (const process of processes) {
-    const editor = EDITORS[process.executable.toLowerCase()];
+    const editor = editorForExecutable(process.executable);
     if (
       editor === undefined ||
       !comparable(process.commandLine, platform).includes(project)
