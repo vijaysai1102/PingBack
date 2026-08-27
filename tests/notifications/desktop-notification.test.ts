@@ -28,16 +28,16 @@ function recordingLogger(): {
 }
 
 class RecordingSound implements SoundPlayer {
-  readonly played: SoundName[] = [];
+  readonly played: Array<{ sound: SoundName; volume: number }> = [];
   failWith: Error | undefined;
 
   isAvailable(): boolean {
     return true;
   }
 
-  play(sound: SoundName): Promise<void> {
+  play(sound: SoundName, volume: number = 1): Promise<void> {
     if (this.failWith !== undefined) return Promise.reject(this.failWith);
-    this.played.push(sound);
+    this.played.push({ sound, volume });
     return Promise.resolve();
   }
 }
@@ -66,6 +66,7 @@ function request(overrides: Partial<NotificationRequest> = {}): NotificationRequ
     priority: 'high',
     project: 'finbot',
     sound: true,
+    volume: 1,
     ...overrides,
   };
 }
@@ -125,7 +126,7 @@ describe('DesktopNotificationService', () => {
     const service = new DesktopNotificationService({ sound, notifier, available: true });
 
     await service.notify(request({ priority: 'high' }));
-    expect(sound.played).toEqual(['attention']);
+    expect(sound.played).toEqual([{ sound: 'attention', volume: 1 }]);
   });
 
   it('plays the error sound for medium priority', async () => {
@@ -134,7 +135,7 @@ describe('DesktopNotificationService', () => {
     const service = new DesktopNotificationService({ sound, notifier, available: true });
 
     await service.notify(request({ priority: 'medium' }));
-    expect(sound.played).toEqual(['error']);
+    expect(sound.played).toEqual([{ sound: 'error', volume: 1 }]);
   });
 
   it('plays no sound when the request asks for silence', async () => {

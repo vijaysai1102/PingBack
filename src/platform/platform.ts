@@ -32,7 +32,7 @@ export interface Platform {
    * How to play a WAV file using only what ships with the OS, so users never
    * have to install an audio helper.
    */
-  buildSoundCommand(filePath: string): SoundCommand;
+  buildSoundCommand(filePath: string, volume: number): SoundCommand;
 }
 
 /**

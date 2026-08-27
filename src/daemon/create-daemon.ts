@@ -40,9 +40,9 @@ export function createDaemon(): CreateDaemonResult {
     store: new FileSessionStore(platform.paths.dataDir),
   });
 
-  const notifications: NotificationService = config.notifications.desktop
+  const notifications: NotificationService = config.notifications.enabled
     ? new DesktopNotificationService({
-        sound: config.notifications.sound
+        sound: config.notifications.sound.enabled
           ? new SoundService({ platform, logger })
           : new NullSoundPlayer(),
         logger,

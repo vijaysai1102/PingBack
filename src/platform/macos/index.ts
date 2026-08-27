@@ -4,8 +4,8 @@ import type { HostInfo, Platform, SoundCommand } from '../platform.js';
 const APP_DIR = 'PingBack';
 
 /** `afplay` ships with macOS, so no extra dependency is needed for sound. */
-function buildSoundCommand(filePath: string): SoundCommand {
-  return { command: '/usr/bin/afplay', args: [filePath] };
+function buildSoundCommand(filePath: string, volume: number): SoundCommand {
+  return { command: '/usr/bin/afplay', args: ['-v', String(volume), filePath] };
 }
 
 export function createMacosPlatform(host: HostInfo): Platform {

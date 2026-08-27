@@ -8,7 +8,7 @@ import { failure, line } from './output.js';
 import { runStatus } from './commands/status.js';
 import { runStart } from './commands/start.js';
 import { runStop } from './commands/stop.js';
-import { runConfigList, runConfigSet } from './commands/config.js';
+import { runConfigGet, runConfigList, runConfigSet } from './commands/config.js';
 import { runSetup, runUninstall } from './commands/setup.js';
 
 export function buildProgram(): Command {
@@ -66,6 +66,13 @@ export function buildProgram(): Command {
     .description('Set a configuration value')
     .action((key: string, value: string) => {
       runConfigSet(key, value);
+    });
+
+  config
+    .command('get <key>')
+    .description('Get a configuration value or section')
+    .action((key: string) => {
+      runConfigGet(key);
     });
 
   return program;

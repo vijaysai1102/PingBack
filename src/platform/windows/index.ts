@@ -10,7 +10,7 @@ const APP_DIR = 'PingBack';
  * Use an absolute path: the daemon may start with a thin PATH (service-like
  * launches, some IDE terminals) where bare `powershell.exe` resolves to ENOENT.
  */
-function buildSoundCommand(filePath: string): SoundCommand {
+function buildSoundCommand(filePath: string, _volume: number): SoundCommand {
   // Single quotes are the PowerShell literal-string delimiter; doubling
   // escapes any quote inside the path.
   const quoted = filePath.replace(/'/g, "''");

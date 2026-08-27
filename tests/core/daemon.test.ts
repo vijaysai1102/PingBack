@@ -125,11 +125,11 @@ describe('Daemon.ingest', () => {
     expect(notifier.sent).toHaveLength(1);
   });
 
-  it('does not send a sound for low-priority completions', async () => {
+  it('sends a sound for task completions by default', async () => {
     const { daemon, notifier } = makeDaemon();
     await daemon.ingest(eventPayload({ id: 'e1', type: 'task_completed' }));
 
-    expect(notifier.sent[0]?.sound).toBe(false);
+    expect(notifier.sent[0]?.sound).toBe(true);
   });
 
   it('sends a sound for high-priority events', async () => {
@@ -141,7 +141,13 @@ describe('Daemon.ingest', () => {
 
   it('honours the desktop:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: { notifications: { desktop: false, sound: true }, logLevel: 'info' },
+      config: {
+        notifications: {
+          ...DEFAULT_CONFIG.notifications,
+          enabled: false,
+        },
+        logLevel: 'info',
+      },
     });
     const ack = await daemon.ingest(eventPayload({ id: 'e1' }));
 
@@ -151,7 +157,13 @@ describe('Daemon.ingest', () => {
 
   it('honours the sound:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: { notifications: { desktop: true, sound: false }, logLevel: 'info' },
+      config: {
+        notifications: {
+          ...DEFAULT_CONFIG.notifications,
+          sound: { enabled: false, volume: 1 },
+        },
+        logLevel: 'info',
+      },
     });
     await daemon.ingest(eventPayload({ id: 'e1' }));
 

@@ -8,6 +8,8 @@ export interface NotificationRequest {
   project?: string | undefined;
   /** Whether a sound should accompany this notification. */
   sound: boolean;
+  /** The configured sound level, from silent (0) to full (1). */
+  volume: number;
 }
 
 export interface NotificationService {

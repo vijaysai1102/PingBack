@@ -2,9 +2,30 @@ import path from 'node:path';
 import { isLogLevel, type LogLevel } from '../utils/logger.js';
 import { readJsonFile, writeJsonFileAtomic } from '../utils/json-file.js';
 
+export type NotificationEventName =
+  'question' | 'turn_completion' | 'error' | 'task_completed';
+
+export const NOTIFICATION_EVENT_NAMES: readonly NotificationEventName[] = [
+  'question',
+  'turn_completion',
+  'error',
+  'task_completed',
+];
+
+export interface NotificationEventConfig {
+  enabled: boolean;
+  delaySeconds: number;
+}
+
+export interface NotificationSoundConfig {
+  enabled: boolean;
+  volume: number;
+}
+
 export interface NotificationConfig {
-  desktop: boolean;
-  sound: boolean;
+  enabled: boolean;
+  sound: NotificationSoundConfig;
+  events: Record<NotificationEventName, NotificationEventConfig>;
 }
 
 export interface PingBackConfig {
@@ -14,8 +35,14 @@ export interface PingBackConfig {
 
 export const DEFAULT_CONFIG: PingBackConfig = {
   notifications: {
-    desktop: true,
-    sound: true,
+    enabled: true,
+    sound: { enabled: true, volume: 1 },
+    events: {
+      question: { enabled: true, delaySeconds: 5 },
+      turn_completion: { enabled: true, delaySeconds: 3 },
+      error: { enabled: true, delaySeconds: 3 },
+      task_completed: { enabled: true, delaySeconds: 5 },
+    },
   },
   logLevel: 'info',
 };
@@ -29,7 +56,16 @@ export interface ConfigLoadResult {
 
 function cloneDefaults(): PingBackConfig {
   return {
-    notifications: { ...DEFAULT_CONFIG.notifications },
+    notifications: {
+      enabled: DEFAULT_CONFIG.notifications.enabled,
+      sound: { ...DEFAULT_CONFIG.notifications.sound },
+      events: Object.fromEntries(
+        NOTIFICATION_EVENT_NAMES.map((name) => [
+          name,
+          { ...DEFAULT_CONFIG.notifications.events[name] },
+        ]),
+      ) as Record<NotificationEventName, NotificationEventConfig>,
+    },
     logLevel: DEFAULT_CONFIG.logLevel,
   };
 }
@@ -38,6 +74,39 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function normalizeBoolean(
+  value: unknown,
+  pathName: string,
+  warnings: string[],
+): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  warnings.push(`"${pathName}" must be true or false; using default.`);
+  return undefined;
+}
+
+function normalizeVolume(value: unknown, warnings: string[]): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) {
+    return value;
+  }
+  warnings.push('"notifications.sound.volume" must be between 0 and 1; using default.');
+  return undefined;
+}
+
+function normalizeDelay(
+  value: unknown,
+  event: NotificationEventName,
+  warnings: string[],
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  warnings.push(
+    `"notifications.events.${event}.delaySeconds" must be a non-negative number; using default.`,
+  );
+  return undefined;
 }
 
 /**
@@ -63,13 +132,63 @@ export function normalizeConfig(raw: unknown): ConfigLoadResult {
     if (notifications === undefined) {
       warnings.push('"notifications" is not an object; using defaults.');
     } else {
-      for (const key of ['desktop', 'sound'] as const) {
-        const value = notifications[key];
-        if (value === undefined) continue;
-        if (typeof value === 'boolean') {
-          config.notifications[key] = value;
+      const enabled = normalizeBoolean(
+        notifications.enabled,
+        'notifications.enabled',
+        warnings,
+      );
+      const legacyDesktop = normalizeBoolean(
+        notifications.desktop,
+        'notifications.desktop',
+        warnings,
+      );
+      config.notifications.enabled =
+        enabled ?? legacyDesktop ?? config.notifications.enabled;
+
+      if (typeof notifications.sound === 'boolean') {
+        config.notifications.sound.enabled = notifications.sound;
+      } else {
+        const sound = asRecord(notifications.sound);
+        if (notifications.sound !== undefined && sound === undefined) {
+          warnings.push('"notifications.sound" must be an object; using default.');
+        } else if (sound !== undefined) {
+          const soundEnabled = normalizeBoolean(
+            sound.enabled,
+            'notifications.sound.enabled',
+            warnings,
+          );
+          const volume = normalizeVolume(sound.volume, warnings);
+          config.notifications.sound.enabled =
+            soundEnabled ?? config.notifications.sound.enabled;
+          config.notifications.sound.volume = volume ?? config.notifications.sound.volume;
+        }
+      }
+
+      if (notifications.events !== undefined) {
+        const events = asRecord(notifications.events);
+        if (events === undefined) {
+          warnings.push('"notifications.events" is not an object; using defaults.');
         } else {
-          warnings.push(`"notifications.${key}" must be true or false; using default.`);
+          for (const event of NOTIFICATION_EVENT_NAMES) {
+            const entry = asRecord(events[event]);
+            if (events[event] === undefined) continue;
+            if (entry === undefined) {
+              warnings.push(
+                `"notifications.events.${event}" is not an object; using default.`,
+              );
+              continue;
+            }
+            const eventEnabled = normalizeBoolean(
+              entry.enabled,
+              `notifications.events.${event}.enabled`,
+              warnings,
+            );
+            const delay = normalizeDelay(entry.delaySeconds, event, warnings);
+            config.notifications.events[event].enabled =
+              eventEnabled ?? config.notifications.events[event].enabled;
+            config.notifications.events[event].delaySeconds =
+              delay ?? config.notifications.events[event].delaySeconds;
+          }
         }
       }
     }
@@ -127,11 +246,33 @@ export class ConfigManager {
   }
 }
 
-export type ConfigKey = 'notifications.desktop' | 'notifications.sound' | 'logLevel';
+type NotificationBooleanConfigKey =
+  | 'notifications.enabled'
+  | 'notifications.sound.enabled'
+  | `notifications.events.${NotificationEventName}.enabled`;
+
+type NotificationNumberConfigKey =
+  | 'notifications.sound.volume'
+  | `notifications.events.${NotificationEventName}.delaySeconds`;
+
+export type ConfigKey =
+  NotificationBooleanConfigKey | NotificationNumberConfigKey | 'logLevel';
+
+export type ConfigPath =
+  | ConfigKey
+  | 'notifications'
+  | 'notifications.sound'
+  | 'notifications.events'
+  | `notifications.events.${NotificationEventName}`;
 
 export const CONFIG_KEYS: readonly ConfigKey[] = [
-  'notifications.desktop',
-  'notifications.sound',
+  'notifications.enabled',
+  'notifications.sound.enabled',
+  'notifications.sound.volume',
+  ...NOTIFICATION_EVENT_NAMES.flatMap((event) => [
+    `notifications.events.${event}.enabled` as const,
+    `notifications.events.${event}.delaySeconds` as const,
+  ]),
   'logLevel',
 ];
 
@@ -139,18 +280,66 @@ export function isConfigKey(value: string): value is ConfigKey {
   return CONFIG_KEYS.includes(value as ConfigKey);
 }
 
-export function getConfigValue(config: PingBackConfig, key: ConfigKey): boolean | string {
-  switch (key) {
-    case 'notifications.desktop':
-      return config.notifications.desktop;
-    case 'notifications.sound':
-      return config.notifications.sound;
-    case 'logLevel':
-      return config.logLevel;
+export function isConfigPath(value: string): value is ConfigPath {
+  return (
+    isConfigKey(value) ||
+    value === 'notifications' ||
+    value === 'notifications.sound' ||
+    value === 'notifications.events' ||
+    NOTIFICATION_EVENT_NAMES.some((event) => value === `notifications.events.${event}`)
+  );
+}
+
+function eventKeyParts(
+  key: ConfigPath,
+): { event: NotificationEventName; field: 'enabled' | 'delaySeconds' } | undefined {
+  const match =
+    /^notifications\.events\.(question|turn_completion|error|task_completed)\.(enabled|delaySeconds)$/.exec(
+      key,
+    );
+  if (match === null) return undefined;
+  return {
+    event: match[1] as NotificationEventName,
+    field: match[2] as 'enabled' | 'delaySeconds',
+  };
+}
+
+export function getConfigValue(config: PingBackConfig, key: ConfigPath): unknown {
+  if (key === 'notifications') return config.notifications;
+  if (key === 'notifications.sound') return config.notifications.sound;
+  if (key === 'notifications.events') return config.notifications.events;
+  if (NOTIFICATION_EVENT_NAMES.some((event) => key === `notifications.events.${event}`)) {
+    const event = key.slice('notifications.events.'.length) as NotificationEventName;
+    return config.notifications.events[event];
   }
+  if (key === 'notifications.enabled') return config.notifications.enabled;
+  if (key === 'notifications.sound.enabled') return config.notifications.sound.enabled;
+  if (key === 'notifications.sound.volume') return config.notifications.sound.volume;
+  if (key === 'logLevel') return config.logLevel;
+
+  const event = eventKeyParts(key);
+  if (event === undefined) return config.logLevel;
+  return config.notifications.events[event.event][event.field];
 }
 
 export type ConfigSetResult = { ok: true } | { ok: false; error: string };
+
+function parseBoolean(key: string, rawValue: string): boolean | ConfigSetResult {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return { ok: false, error: `${key} must be true or false` };
+}
+
+function parseNumber(
+  rawValue: string,
+  minimum: number,
+  error: string,
+): number | ConfigSetResult {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < minimum) return { ok: false, error };
+  return value;
+}
 
 export function setConfigValue(
   config: PingBackConfig,
@@ -165,14 +354,36 @@ export function setConfigValue(
     return { ok: true };
   }
 
-  const normalized = rawValue.trim().toLowerCase();
-  if (normalized !== 'true' && normalized !== 'false') {
-    return { ok: false, error: `${key} must be true or false` };
+  if (key === 'notifications.sound.volume') {
+    const value = parseNumber(
+      rawValue,
+      0,
+      'notifications.sound.volume must be between 0 and 1.',
+    );
+    if (typeof value !== 'number' || value > 1) {
+      return typeof value === 'number'
+        ? { ok: false, error: 'notifications.sound.volume must be between 0 and 1.' }
+        : value;
+    }
+    config.notifications.sound.volume = value;
+    return { ok: true };
   }
 
-  const value = normalized === 'true';
-  if (key === 'notifications.desktop') config.notifications.desktop = value;
-  else config.notifications.sound = value;
+  const event = eventKeyParts(key);
+  if (event?.field === 'delaySeconds') {
+    const value = parseNumber(rawValue, 0, `${key} must be a non-negative number.`);
+    if (typeof value !== 'number') return value;
+    config.notifications.events[event.event].delaySeconds = value;
+    return { ok: true };
+  }
+
+  const value = parseBoolean(key, rawValue);
+  if (typeof value !== 'boolean') return value;
+  if (key === 'notifications.enabled') config.notifications.enabled = value;
+  else if (key === 'notifications.sound.enabled')
+    config.notifications.sound.enabled = value;
+  else if (event?.field === 'enabled')
+    config.notifications.events[event.event].enabled = value;
 
   return { ok: true };
 }

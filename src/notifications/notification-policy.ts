@@ -24,15 +24,15 @@ export function projectName(cwd: string | undefined): string | undefined {
 }
 
 /**
- * Low-priority events (task completions) are silent by default so PingBack
- * stays unobtrusive; anything that blocks the developer gets a sound.
+ * Every enabled v0.2 notification event plays sound unless the user disables
+ * sound globally. Event priorities still determine which bundled tone is used.
  */
 export function shouldPlaySound(
   priority: RoutedEvent['priority'],
   config: NotificationConfig,
 ): boolean {
-  if (!config.sound) return false;
-  return priority !== 'low';
+  void priority;
+  return config.sound.enabled;
 }
 
 /** Each priority gets a distinct tone so the reason is audible without looking. */
@@ -51,7 +51,7 @@ export function buildNotification(
   routed: RoutedEvent,
   config: NotificationConfig,
 ): NotificationRequest | undefined {
-  if (!config.desktop) return undefined;
+  if (!config.enabled) return undefined;
 
   const project = projectName(routed.session.cwd ?? routed.event.cwd);
 
@@ -61,5 +61,6 @@ export function buildNotification(
     priority: routed.priority,
     project,
     sound: shouldPlaySound(routed.priority, config),
+    volume: config.sound.volume,
   };
 }

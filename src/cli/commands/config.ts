@@ -3,6 +3,7 @@ import {
   ConfigManager,
   getConfigValue,
   isConfigKey,
+  isConfigPath,
   setConfigValue,
 } from '../../config/config-manager.js';
 import { createPlatform } from '../../platform/platform.js';
@@ -50,4 +51,25 @@ export function runConfigSet(key: string, value: string): void {
   line('Restart PingBack for changes to take effect:');
   line('');
   line('    pingback stop && pingback start');
+}
+
+export function runConfigGet(key: string): void {
+  if (!isConfigPath(key)) {
+    throw new PingBackError(`Unknown config key: ${key}`, {
+      code: 'INVALID_CONFIG',
+      hint: `Available keys:\n\n    ${CONFIG_KEYS.join('\n    ')}\n    notifications`,
+    });
+  }
+
+  const configManager = manager();
+  const { config, warnings } = configManager.load();
+  const value = getConfigValue(config, key);
+
+  line(
+    typeof value === 'object' && value !== null
+      ? JSON.stringify(value, null, 2)
+      : String(value),
+  );
+
+  for (const message of warnings) warn(message);
 }

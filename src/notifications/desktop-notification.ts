@@ -62,7 +62,7 @@ export class DesktopNotificationService implements NotificationService {
   async #playSound(request: NotificationRequest): Promise<void> {
     if (!request.sound) return;
     try {
-      await this.#sound.play(soundForPriority(request.priority));
+      await this.#sound.play(soundForPriority(request.priority), request.volume);
     } catch (error) {
       // Sound is secondary; a silent notification still does its job.
       this.#logger.warn('notification sound failed', { err: error });

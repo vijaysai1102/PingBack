@@ -5,6 +5,23 @@ import {
   shouldPlaySound,
 } from '../../src/notifications/notification-policy.js';
 import type { RoutedEvent } from '../../src/core/event-router.js';
+import type { NotificationConfig } from '../../src/config/config-manager.js';
+
+function notificationConfig(
+  overrides: Partial<NotificationConfig> = {},
+): NotificationConfig {
+  return {
+    enabled: true,
+    sound: { enabled: true, volume: 0.8 },
+    events: {
+      question: { enabled: true, delaySeconds: 5 },
+      turn_completion: { enabled: true, delaySeconds: 3 },
+      error: { enabled: true, delaySeconds: 3 },
+      task_completed: { enabled: true, delaySeconds: 5 },
+    },
+    ...overrides,
+  };
+}
 
 function routed(overrides: Partial<RoutedEvent> = {}): RoutedEvent {
   return {
@@ -56,23 +73,26 @@ describe('projectName', () => {
 });
 
 describe('shouldPlaySound', () => {
-  it('stays silent for low-priority events', () => {
-    expect(shouldPlaySound('low', { desktop: true, sound: true })).toBe(false);
-  });
-
-  it('plays for medium and high priority', () => {
-    expect(shouldPlaySound('medium', { desktop: true, sound: true })).toBe(true);
-    expect(shouldPlaySound('high', { desktop: true, sound: true })).toBe(true);
+  it('plays for every v0.2 notification event when sound is enabled', () => {
+    const config = notificationConfig();
+    expect(shouldPlaySound('low', config)).toBe(true);
+    expect(shouldPlaySound('medium', config)).toBe(true);
+    expect(shouldPlaySound('high', config)).toBe(true);
   });
 
   it('never plays when sound is disabled', () => {
-    expect(shouldPlaySound('high', { desktop: true, sound: false })).toBe(false);
+    expect(
+      shouldPlaySound(
+        'high',
+        notificationConfig({ sound: { enabled: false, volume: 0.8 } }),
+      ),
+    ).toBe(false);
   });
 });
 
 describe('buildNotification', () => {
   it('builds a notification from a routed event', () => {
-    const request = buildNotification(routed(), { desktop: true, sound: true });
+    const request = buildNotification(routed(), notificationConfig());
 
     expect(request).toEqual({
       title: 'Claude Code needs your attention',
@@ -80,11 +100,14 @@ describe('buildNotification', () => {
       priority: 'high',
       project: 'finbot',
       sound: true,
+      volume: 0.8,
     });
   });
 
-  it('returns undefined when desktop notifications are disabled', () => {
-    expect(buildNotification(routed(), { desktop: false, sound: true })).toBeUndefined();
+  it('returns undefined when notifications are disabled', () => {
+    expect(
+      buildNotification(routed(), notificationConfig({ enabled: false })),
+    ).toBeUndefined();
   });
 
   it('falls back to the event cwd when the session has none', () => {
@@ -92,7 +115,7 @@ describe('buildNotification', () => {
       routed({
         session: { id: 's1', agent: 'claude', status: 'waiting', startedAt: 0 },
       }),
-      { desktop: true, sound: true },
+      notificationConfig(),
     );
 
     expect(request?.project).toBe('finbot');
@@ -113,7 +136,7 @@ describe('buildNotification', () => {
         session: { id: 's1', agent: 'claude', status: 'error', startedAt: 0 },
         priority: 'medium',
       }),
-      { desktop: true, sound: true },
+      notificationConfig(),
     );
 
     expect(request?.project).toBeUndefined();
