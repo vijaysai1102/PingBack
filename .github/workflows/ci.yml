@@ -189,15 +189,15 @@ jobs:
           }
 
           show_config
-          grep -q "notifications.sound = true" config.txt || fail "expected sound to default to true"
+          grep -q "notifications.sound.enabled = true" config.txt || fail "expected sound to default to true"
 
-          pingback config set notifications.sound false > set.txt 2>&1 || fail "config set failed"
+          pingback config set notifications.sound.enabled false > set.txt 2>&1 || fail "config set failed"
           cat set.txt
 
           show_config
-          grep -q "notifications.sound = false" config.txt || fail "setting sound to false did not persist"
+          grep -q "notifications.sound.enabled = false" config.txt || fail "setting sound to false did not persist"
 
-          pingback config set notifications.sound true > restore.txt 2>&1 || fail "restoring sound failed"
+          pingback config set notifications.sound.enabled true > restore.txt 2>&1 || fail "restoring sound failed"
 
           # Invalid input must fail loudly rather than silently succeed.
           if pingback config set bogus.key true > config.txt 2>&1; then
