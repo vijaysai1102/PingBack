@@ -148,6 +148,50 @@ describe('DesktopNotificationService', () => {
     expect(sound.played).toEqual([]);
   });
 
+  it('runs the session-bound activation handler when the notification is clicked', async () => {
+    let activations = 0;
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, 'activate');
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await service.notify(
+      request({
+        onActivate: () => {
+          activations += 1;
+        },
+      }),
+    );
+
+    expect(activations).toBe(1);
+  });
+
+  it('returns after dispatching an activatable notification without waiting for a click', async () => {
+    let activationCallback:
+      ((error: Error | null, response?: string) => void) | undefined;
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        activationCallback = callback;
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await expect(
+      service.notify(request({ onActivate: () => undefined })),
+    ).resolves.toBeUndefined();
+    expect(activationCallback).toBeDefined();
+  });
+
   it('still resolves when the notifier reports an error', async () => {
     const { notifier } = fakeNotifier(new Error('no notification center'));
     const service = new DesktopNotificationService({

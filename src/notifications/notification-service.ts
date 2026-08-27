@@ -12,6 +12,8 @@ export interface NotificationRequest {
   volume: number;
   /** Delay before desktop delivery; blocking attention events use zero. */
   delaySeconds: number;
+  /** Runs after a supported native notification activation. */
+  onActivate?: (() => void | Promise<void>) | undefined;
 }
 
 export interface NotificationService {

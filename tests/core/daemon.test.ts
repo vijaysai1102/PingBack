@@ -13,6 +13,10 @@ import type {
   NotificationService,
 } from '../../src/notifications/notification-service.js';
 import type { IpcRequest } from '../../src/core/ipc/protocol.js';
+import type {
+  ApplicationFocusService,
+  ApplicationInfo,
+} from '../../src/applications/project-association.js';
 
 class RecordingNotifier implements NotificationService {
   readonly sent: NotificationRequest[] = [];
@@ -46,6 +50,7 @@ function makeDaemon(
     notifier?: NotificationService;
     config?: PingBackConfig;
     claudeConnected?: () => boolean;
+    applicationFocus?: ApplicationFocusService;
   } = {},
 ): { daemon: Daemon; sessions: SessionManager; notifier: RecordingNotifier } {
   const notifier = (overrides.notifier ?? new RecordingNotifier()) as RecordingNotifier;
@@ -60,6 +65,9 @@ function makeDaemon(
     logger: silentLogger(),
     version: '0.1.0',
     now: () => clock,
+    ...(overrides.applicationFocus === undefined
+      ? {}
+      : { applicationFocus: overrides.applicationFocus }),
     ...(overrides.claudeConnected === undefined
       ? {}
       : { claudeConnected: overrides.claudeConnected }),
@@ -106,6 +114,28 @@ describe('Daemon.ingest', () => {
     await daemon.ingest(eventPayload({ id: 'e1' }));
 
     expect(sessions.get('session-a')?.status).toBe('waiting');
+  });
+
+  it('binds a matched application focus action to a notification', async () => {
+    const application: ApplicationInfo = {
+      id: 'visual-studio-code',
+      name: 'Visual Studio Code',
+      projectPaths: ['/Users/dev/finbot'],
+    };
+    let focused = false;
+    const applicationFocus: ApplicationFocusService = {
+      detectApplication: () => Promise.resolve(application),
+      focusApplication: () => {
+        focused = true;
+        return Promise.resolve(true);
+      },
+    };
+    const { daemon, notifier } = makeDaemon({ applicationFocus });
+
+    await daemon.ingest(eventPayload({ id: 'e1' }));
+    await notifier.sent[0]?.onActivate?.();
+
+    expect(focused).toBe(true);
   });
 
   it('rejects a malformed event', async () => {

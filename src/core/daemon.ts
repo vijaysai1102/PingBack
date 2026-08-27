@@ -2,6 +2,7 @@ import type { Platform } from '../platform/platform.js';
 import type { PingBackConfig } from '../config/config-manager.js';
 import type { Logger } from '../utils/logger.js';
 import type { NotificationService } from '../notifications/notification-service.js';
+import type { ApplicationFocusService } from '../applications/project-association.js';
 import { buildNotification } from '../notifications/notification-policy.js';
 import { NotificationScheduler } from '../notifications/notification-scheduler.js';
 import type { SessionManager } from '../sessions/session-manager.js';
@@ -21,6 +22,7 @@ export interface DaemonOptions {
   version: string;
   /** Reports whether the Claude integration is currently installed. */
   claudeConnected?: () => boolean;
+  applicationFocus?: ApplicationFocusService;
   pruneIntervalMs?: number;
   now?: () => number;
 }
@@ -205,6 +207,16 @@ export class Daemon {
   async #notify(routed: Parameters<typeof buildNotification>[0]): Promise<boolean> {
     const request = buildNotification(routed, this.#options.config.notifications);
     if (request === undefined) return false;
+
+    const applicationFocus = this.#options.applicationFocus;
+    if (applicationFocus !== undefined) {
+      const application = await applicationFocus.detectApplication(routed.session);
+      if (application !== undefined) {
+        request.onActivate = async () => {
+          await applicationFocus.focusApplication(application);
+        };
+      }
+    }
 
     if (!this.#options.notifications.isAvailable()) {
       this.#logger.warn('notification skipped', { reason: 'unavailable' });

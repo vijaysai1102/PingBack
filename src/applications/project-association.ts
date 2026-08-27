@@ -5,10 +5,12 @@ export interface ApplicationInfo {
   id: string;
   name: string;
   projectPaths: string[];
+  /** Native process identifier when the platform can focus a specific editor instance. */
+  processId?: number;
 }
 
 export interface ApplicationFocusPlatform {
-  discover(): Promise<ApplicationInfo[]>;
+  discover(projectPath: string): Promise<ApplicationInfo[]>;
   focus(application: ApplicationInfo): Promise<boolean>;
 }
 
@@ -47,8 +49,9 @@ export class ProjectApplicationFocusService implements ApplicationFocusService {
   }
 
   async detectApplication(session: AgentSession): Promise<ApplicationInfo | undefined> {
+    if (session.cwd === undefined || session.cwd.trim().length === 0) return undefined;
     try {
-      const applications = await this.#platform.discover();
+      const applications = await this.#platform.discover(session.cwd);
       return associateProjectApplication(session, applications, this.#platformId);
     } catch {
       return undefined;

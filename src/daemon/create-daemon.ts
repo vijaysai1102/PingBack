@@ -3,7 +3,9 @@ import { ClaudeAdapter } from '../agents/claude/adapter.js';
 import { ConfigManager } from '../config/config-manager.js';
 import { Daemon } from '../core/daemon.js';
 import { DaemonState } from '../core/daemon-state.js';
-import { createPlatform, type Platform } from '../platform/platform.js';
+import { createPlatform, type Platform, type PlatformId } from '../platform/platform.js';
+import { createApplicationFocus } from '../applications/create-application-focus.js';
+import type { ApplicationFocusService } from '../applications/project-association.js';
 import { SessionManager } from '../sessions/session-manager.js';
 import { FileSessionStore } from '../sessions/session-store.js';
 import type { NotificationService } from '../notifications/notification-service.js';
@@ -19,9 +21,14 @@ export interface CreateDaemonResult {
   platform: Platform;
 }
 
+export interface CreateDaemonOptions {
+  platform?: Platform;
+  applicationFocusFactory?: (platform: PlatformId) => ApplicationFocusService;
+}
+
 /** Assembles the daemon from on-disk configuration and platform defaults. */
-export function createDaemon(): CreateDaemonResult {
-  const platform = createPlatform();
+export function createDaemon(options: CreateDaemonOptions = {}): CreateDaemonResult {
+  const platform = options.platform ?? createPlatform();
 
   const configManager = new ConfigManager(platform.paths.configDir);
   const { config, warnings } = configManager.load();
@@ -49,6 +56,15 @@ export function createDaemon(): CreateDaemonResult {
       })
     : new NullNotificationService();
 
+  let applicationFocus: ApplicationFocusService | undefined;
+  try {
+    applicationFocus = (options.applicationFocusFactory ?? createApplicationFocus)(
+      platform.id,
+    );
+  } catch (error) {
+    logger.warn('application focus unavailable', { err: error });
+  }
+
   const daemon = new Daemon({
     platform,
     config,
@@ -58,6 +74,7 @@ export function createDaemon(): CreateDaemonResult {
     logger,
     version: packageVersion(),
     claudeConnected: () => new ClaudeAdapter().isConfigured(),
+    ...(applicationFocus === undefined ? {} : { applicationFocus }),
   });
 
   return { daemon, logger, platform };

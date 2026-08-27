@@ -11,7 +11,7 @@ export const APP_NAME = 'PingBack';
 export interface NotifierLike {
   notify(
     options: Record<string, unknown>,
-    callback: (error: Error | null) => void,
+    callback: (error: Error | null, response?: string) => void,
   ): unknown;
 }
 
@@ -71,9 +71,14 @@ export class DesktopNotificationService implements NotificationService {
 
   #showToast(request: NotificationRequest): Promise<void> {
     return new Promise<void>((resolve) => {
-      const done = (error: Error | null): void => {
+      const done = (error: Error | null, response?: string): void => {
         if (error) this.#logger.warn('desktop notification failed', { err: error });
         else this.#logger.info('notification delivered', { priority: request.priority });
+        if (response === 'activate' && request.onActivate !== undefined) {
+          void Promise.resolve(request.onActivate()).catch((activationError: unknown) => {
+            this.#logger.warn('notification activation failed', { err: activationError });
+          });
+        }
         resolve();
       };
 
@@ -84,10 +89,13 @@ export class DesktopNotificationService implements NotificationService {
             message: formatBody(request),
             appName: APP_NAME,
             sound: false,
-            wait: false,
+            wait: request.onActivate !== undefined,
           },
           done,
         );
+        // node-notifier backends can retain the callback until the user clicks
+        // an activatable toast. Dispatch must not hold up daemon event handling.
+        resolve();
       } catch (error) {
         this.#logger.warn('desktop notification threw', { err: error });
         resolve();
