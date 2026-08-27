@@ -7,10 +7,11 @@
 export type AgentType = 'claude';
 
 export type AgentEventType =
-  'attention_required' | 'task_completed' | 'error' | 'question';
+  'attention_required' | 'turn_completion' | 'task_completed' | 'error' | 'question';
 
 export const AGENT_EVENT_TYPES: readonly AgentEventType[] = [
   'attention_required',
+  'turn_completion',
   'task_completed',
   'error',
   'question',
@@ -59,6 +60,7 @@ export interface AgentSession {
 const PRIORITY_BY_EVENT: Record<AgentEventType, EventPriority> = {
   task_completed: 'low',
   error: 'medium',
+  turn_completion: 'low',
   attention_required: 'high',
   question: 'high',
 };
@@ -71,6 +73,7 @@ export function priorityForEvent(type: AgentEventType): EventPriority {
 const STATUS_BY_EVENT: Record<AgentEventType, SessionStatus> = {
   task_completed: 'completed',
   error: 'error',
+  turn_completion: 'waiting',
   attention_required: 'waiting',
   question: 'waiting',
 };

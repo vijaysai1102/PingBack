@@ -167,7 +167,7 @@ describe('the PingBack v0.1 target scenario', () => {
     expect(notifier.sent).toHaveLength(0);
   });
 
-  it('notifies once when Claude finishes and goes idle', async () => {
+  it('notifies once after the turn-completion delay when Claude goes idle', async () => {
     await fireHook({
       session_id: 's',
       cwd: '/code/x',
@@ -176,8 +176,9 @@ describe('the PingBack v0.1 target scenario', () => {
       message: 'Claude is waiting for your input',
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 3_050));
     expect(notifier.sent).toHaveLength(1);
-    expect(notifier.sent[0]?.priority).toBe('high');
+    expect(notifier.sent[0]?.priority).toBe('low');
     expect(sessions.get('s')?.status).toBe('waiting');
   });
 

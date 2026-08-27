@@ -120,6 +120,18 @@ describe('buildNotification', () => {
     expect(request).toMatchObject({ delaySeconds: 3 });
   });
 
+  it('uses the turn-completion delay for normal Claude idle notifications', () => {
+    const request = buildNotification(
+      routed({
+        event: { ...routed().event, type: 'turn_completion' },
+        priority: 'low',
+      }),
+      notificationConfig(),
+    );
+
+    expect(request).toMatchObject({ delaySeconds: 3, sound: true });
+  });
+
   it('does not build a notification for a disabled event type', () => {
     const config = notificationConfig();
     config.events.error.enabled = false;

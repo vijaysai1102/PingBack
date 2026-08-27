@@ -19,6 +19,7 @@ function str(value: unknown): string | undefined {
 const TITLES: Record<AgentEventType, string> = {
   attention_required: 'Claude Code needs your attention',
   question: 'Claude Code has a question',
+  turn_completion: 'Claude Code completed a turn',
   error: 'Claude Code hit an error',
   task_completed: 'Claude Code finished',
 };
@@ -26,6 +27,7 @@ const TITLES: Record<AgentEventType, string> = {
 const DEFAULT_MESSAGES: Record<AgentEventType, string> = {
   attention_required: 'Claude is waiting for you.',
   question: 'Claude is waiting for your answer.',
+  turn_completion: 'Claude completed its turn.',
   error: 'Claude stopped because of an error.',
   task_completed: 'Claude finished working.',
 };
@@ -33,25 +35,28 @@ const DEFAULT_MESSAGES: Record<AgentEventType, string> = {
 /**
  * Maps a Claude notification onto PingBack's event model.
  *
- * `idle_prompt` is treated as attention rather than a quiet completion: it
- * fires when Claude has finished and is waiting, which is exactly the moment
- * PingBack exists to catch.
+ * `idle_prompt` denotes the end of a normal turn, distinct from a blocking
+ * permission or input request and from the explicit `agent_completed` signal.
  */
 export function eventTypeForNotification(
   notificationType: string | undefined,
 ): AgentEventType | undefined {
   switch (notificationType as ClaudeNotificationType | undefined) {
     case 'permission_prompt':
-    case 'idle_prompt':
     case 'agent_needs_input':
-      return 'attention_required';
     case 'elicitation_dialog':
-      return 'question';
+    case 'elicitation_url_dialog':
+      return 'attention_required';
+    case 'idle_prompt':
+      return 'turn_completion';
     case 'agent_completed':
       return 'task_completed';
     case 'auth_success':
     case 'elicitation_complete':
     case 'elicitation_response':
+    case 'quota_auto_resume_fired':
+    case 'quota_auto_resume_stale':
+    case 'quota_auto_resume_disabled':
       return undefined;
     default:
       // Claude Code only notifies when it wants the developer, so an

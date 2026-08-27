@@ -21,12 +21,13 @@ function notification(overrides: Record<string, unknown> = {}): Record<string, u
 describe('eventTypeForNotification', () => {
   it('maps blocking notification types to attention', () => {
     expect(eventTypeForNotification('permission_prompt')).toBe('attention_required');
-    expect(eventTypeForNotification('idle_prompt')).toBe('attention_required');
     expect(eventTypeForNotification('agent_needs_input')).toBe('attention_required');
+    expect(eventTypeForNotification('elicitation_dialog')).toBe('attention_required');
+    expect(eventTypeForNotification('elicitation_url_dialog')).toBe('attention_required');
   });
 
-  it('maps an elicitation dialog to a question', () => {
-    expect(eventTypeForNotification('elicitation_dialog')).toBe('question');
+  it('maps idle notifications to a normal turn completion', () => {
+    expect(eventTypeForNotification('idle_prompt')).toBe('turn_completion');
   });
 
   it('maps a finished background agent to a completion', () => {
@@ -37,6 +38,7 @@ describe('eventTypeForNotification', () => {
     expect(eventTypeForNotification('auth_success')).toBeUndefined();
     expect(eventTypeForNotification('elicitation_complete')).toBeUndefined();
     expect(eventTypeForNotification('elicitation_response')).toBeUndefined();
+    expect(eventTypeForNotification('quota_auto_resume_fired')).toBeUndefined();
   });
 
   it('surfaces an unrecognized type rather than dropping it', () => {
@@ -79,25 +81,25 @@ describe('normalizeHookPayload: Notification', () => {
     expect(result.event.message).toBe('Claude is waiting for you.');
   });
 
-  it('treats an idle prompt as attention, not a quiet completion', () => {
+  it('treats an idle prompt as a normal turn completion', () => {
     const result = normalizeHookPayload(
       notification({ notification_type: 'idle_prompt' }),
       now,
     );
 
     if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event.type).toBe('attention_required');
+    expect(result.event.type).toBe('turn_completion');
   });
 
-  it('titles an elicitation dialog as a question', () => {
+  it('treats an elicitation dialog as immediate attention', () => {
     const result = normalizeHookPayload(
       notification({ notification_type: 'elicitation_dialog' }),
       now,
     );
 
     if (result.kind !== 'event') throw new Error('expected event');
-    expect(result.event.type).toBe('question');
-    expect(result.event.title).toBe('Claude Code has a question');
+    expect(result.event.type).toBe('attention_required');
+    expect(result.event.title).toBe('Claude Code needs your attention');
   });
 
   it('ignores an auth success notification', () => {

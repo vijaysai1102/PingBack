@@ -26,10 +26,14 @@ export type ClaudeNotificationType =
   | 'idle_prompt'
   | 'auth_success'
   | 'elicitation_dialog'
+  | 'elicitation_url_dialog'
   | 'elicitation_complete'
   | 'elicitation_response'
   | 'agent_needs_input'
-  | 'agent_completed';
+  | 'agent_completed'
+  | 'quota_auto_resume_fired'
+  | 'quota_auto_resume_stale'
+  | 'quota_auto_resume_disabled';
 
 export interface ClaudeHookPayload {
   session_id?: unknown;

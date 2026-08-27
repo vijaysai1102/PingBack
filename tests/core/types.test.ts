@@ -25,6 +25,7 @@ describe('priorityForEvent', () => {
 
   it('classifies errors as medium and completions as low', () => {
     expect(priorityForEvent('error')).toBe('medium');
+    expect(priorityForEvent('turn_completion')).toBe('low');
     expect(priorityForEvent('task_completed')).toBe('low');
   });
 });
@@ -34,16 +35,18 @@ describe('statusForEvent', () => {
     expect(statusForEvent('attention_required')).toBe('waiting');
     expect(statusForEvent('question')).toBe('waiting');
     expect(statusForEvent('error')).toBe('error');
+    expect(statusForEvent('turn_completion')).toBe('waiting');
     expect(statusForEvent('task_completed')).toBe('completed');
   });
 });
 
 describe('isAgentEventType', () => {
-  it('accepts the four v0.1 event types', () => {
+  it('accepts the v0.2 event types', () => {
     expect(isAgentEventType('attention_required')).toBe(true);
     expect(isAgentEventType('task_completed')).toBe(true);
     expect(isAgentEventType('error')).toBe(true);
     expect(isAgentEventType('question')).toBe(true);
+    expect(isAgentEventType('turn_completion')).toBe(true);
   });
 
   it('rejects unknown and non-string values', () => {

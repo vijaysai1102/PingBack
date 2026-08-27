@@ -57,6 +57,8 @@ function eventSettings(
   switch (routed.event.type) {
     case 'question':
       return config.events.question;
+    case 'turn_completion':
+      return config.events.turn_completion;
     case 'error':
       return config.events.error;
     case 'task_completed':
