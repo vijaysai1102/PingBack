@@ -125,11 +125,50 @@ describe('Daemon.ingest', () => {
     expect(notifier.sent).toHaveLength(1);
   });
 
-  it('sends a sound for task completions by default', async () => {
-    const { daemon, notifier } = makeDaemon();
-    await daemon.ingest(eventPayload({ id: 'e1', type: 'task_completed' }));
+  it('sends a sound for task completions after their default delay', async () => {
+    vi.useFakeTimers();
+    try {
+      const { daemon, notifier } = makeDaemon();
+      await daemon.ingest(eventPayload({ id: 'e1', type: 'task_completed' }));
 
-    expect(notifier.sent[0]?.sound).toBe(true);
+      expect(notifier.sent).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(notifier.sent[0]?.sound).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('acknowledges an error immediately and delivers it after its configured delay', async () => {
+    vi.useFakeTimers();
+    try {
+      const { daemon, notifier } = makeDaemon();
+
+      await expect(
+        daemon.ingest(eventPayload({ id: 'e1', type: 'error' })),
+      ).resolves.toEqual({ accepted: true, duplicate: false, notified: false });
+      expect(notifier.sent).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(notifier.sent).toHaveLength(1);
+      expect(notifier.sent[0]?.priority).toBe('medium');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a delayed notification when the same session resumes working', async () => {
+    vi.useFakeTimers();
+    try {
+      const { daemon, notifier } = makeDaemon();
+      await daemon.ingest(eventPayload({ id: 'e1', type: 'error' }));
+      daemon.updateSession({ sessionId: 'session-a', status: 'working' });
+
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(notifier.sent).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('sends a sound for high-priority events', async () => {

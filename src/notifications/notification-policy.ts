@@ -47,11 +47,34 @@ export function soundForPriority(priority: EventPriority): SoundName {
   }
 }
 
+function eventSettings(
+  routed: RoutedEvent,
+  config: NotificationConfig,
+): {
+  enabled: boolean;
+  delaySeconds: number;
+} {
+  switch (routed.event.type) {
+    case 'question':
+      return config.events.question;
+    case 'error':
+      return config.events.error;
+    case 'task_completed':
+      return config.events.task_completed;
+    case 'attention_required':
+      // Permission and input prompts are explicitly blocking, so they do not
+      // inherit the normal completion delay.
+      return { enabled: true, delaySeconds: 0 };
+  }
+}
+
 export function buildNotification(
   routed: RoutedEvent,
   config: NotificationConfig,
 ): NotificationRequest | undefined {
   if (!config.enabled) return undefined;
+  const settings = eventSettings(routed, config);
+  if (!settings.enabled) return undefined;
 
   const project = projectName(routed.session.cwd ?? routed.event.cwd);
 
@@ -62,5 +85,6 @@ export function buildNotification(
     project,
     sound: shouldPlaySound(routed.priority, config),
     volume: config.sound.volume,
+    delaySeconds: settings.delaySeconds,
   };
 }

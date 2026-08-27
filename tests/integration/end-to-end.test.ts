@@ -190,6 +190,7 @@ describe('the PingBack v0.1 target scenario', () => {
       last_assistant_message: 'API Error: Rate limit reached',
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 3_050));
     expect(notifier.sent[0]).toMatchObject({
       title: 'Claude Code hit an error',
       message: 'API Error: Rate limit reached',

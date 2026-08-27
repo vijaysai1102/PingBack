@@ -67,6 +67,7 @@ function request(overrides: Partial<NotificationRequest> = {}): NotificationRequ
     project: 'finbot',
     sound: true,
     volume: 1,
+    delaySeconds: 0,
     ...overrides,
   };
 }

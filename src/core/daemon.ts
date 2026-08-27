@@ -3,6 +3,7 @@ import type { PingBackConfig } from '../config/config-manager.js';
 import type { Logger } from '../utils/logger.js';
 import type { NotificationService } from '../notifications/notification-service.js';
 import { buildNotification } from '../notifications/notification-policy.js';
+import { NotificationScheduler } from '../notifications/notification-scheduler.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import type { DaemonState } from './daemon-state.js';
 import { EventRouter } from './event-router.js';
@@ -41,6 +42,7 @@ export class Daemon {
   readonly #router: EventRouter;
   readonly #logger: Logger;
   readonly #now: () => number;
+  readonly #scheduler = new NotificationScheduler();
 
   #server: IpcServer | undefined;
   #pruneTimer: NodeJS.Timeout | undefined;
@@ -165,6 +167,9 @@ export class Daemon {
       cwd: update.cwd,
       pid: update.pid,
     });
+    if (update.status === 'working' || update.status === 'completed') {
+      this.#scheduler.cancelSession(update.sessionId);
+    }
 
     this.#logger.debug('session updated', {
       sessionId: update.sessionId,
@@ -206,6 +211,23 @@ export class Daemon {
       return false;
     }
 
+    if (request.delaySeconds > 0) {
+      this.#scheduler.schedule(
+        { sessionId: routed.session.id, eventType: routed.event.type },
+        request.delaySeconds,
+        async () => {
+          await this.#deliver(request);
+        },
+      );
+      return false;
+    }
+
+    return this.#deliver(request);
+  }
+
+  async #deliver(
+    request: Parameters<NotificationService['notify']>[0],
+  ): Promise<boolean> {
     try {
       await this.#options.notifications.notify(request);
       this.#logger.debug('notification delivered', { priority: request.priority });

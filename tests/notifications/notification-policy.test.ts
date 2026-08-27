@@ -101,7 +101,38 @@ describe('buildNotification', () => {
       project: 'finbot',
       sound: true,
       volume: 0.8,
+      delaySeconds: 0,
     });
+  });
+
+  it('uses the event-specific delay for errors', () => {
+    const request = buildNotification(
+      routed({
+        event: {
+          ...routed().event,
+          type: 'error',
+        },
+        priority: 'medium',
+      }),
+      notificationConfig(),
+    );
+
+    expect(request).toMatchObject({ delaySeconds: 3 });
+  });
+
+  it('does not build a notification for a disabled event type', () => {
+    const config = notificationConfig();
+    config.events.error.enabled = false;
+
+    expect(
+      buildNotification(
+        routed({
+          event: { ...routed().event, type: 'error' },
+          priority: 'medium',
+        }),
+        config,
+      ),
+    ).toBeUndefined();
   });
 
   it('returns undefined when notifications are disabled', () => {

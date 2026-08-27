@@ -10,6 +10,8 @@ export interface NotificationRequest {
   sound: boolean;
   /** The configured sound level, from silent (0) to full (1). */
   volume: number;
+  /** Delay before desktop delivery; blocking attention events use zero. */
+  delaySeconds: number;
 }
 
 export interface NotificationService {
