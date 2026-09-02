@@ -16,26 +16,20 @@ export function getEditorStoragePath(
   const { platform, homedir, env } = context;
 
   if (platform === 'windows') {
-    const appData = env.APPDATA ?? path.win32.join(homedir, 'AppData', 'Roaming');
+    const appData = env.APPDATA ?? path.join(homedir, 'AppData', 'Roaming');
     if (editorId === 'cursor') {
-      return path.win32.join(appData, 'Cursor', 'User', 'globalStorage', 'storage.json');
+      return path.join(appData, 'Cursor', 'User', 'globalStorage', 'storage.json');
     }
     if (editorId === 'visual-studio-code') {
-      return path.win32.join(appData, 'Code', 'User', 'globalStorage', 'storage.json');
+      return path.join(appData, 'Code', 'User', 'globalStorage', 'storage.json');
     }
   } else if (platform === 'macos') {
-    const appSupport = path.posix.join(homedir, 'Library', 'Application Support');
+    const appSupport = path.join(homedir, 'Library', 'Application Support');
     if (editorId === 'cursor') {
-      return path.posix.join(
-        appSupport,
-        'Cursor',
-        'User',
-        'globalStorage',
-        'storage.json',
-      );
+      return path.join(appSupport, 'Cursor', 'User', 'globalStorage', 'storage.json');
     }
     if (editorId === 'visual-studio-code') {
-      return path.posix.join(appSupport, 'Code', 'User', 'globalStorage', 'storage.json');
+      return path.join(appSupport, 'Code', 'User', 'globalStorage', 'storage.json');
     }
   }
 
@@ -46,6 +40,10 @@ export function parseWorkspaceFolderUrl(folderUrl: string): string {
   try {
     const decoded = decodeURIComponent(folderUrl);
     if (decoded.startsWith('file:///')) {
+      const match = /^file:\/\/\/([a-zA-Z]:.*)$/.exec(decoded);
+      if (match !== null && match[1] !== undefined) {
+        return match[1].replace(/\//g, '\\');
+      }
       return fileURLToPath(new URL(decoded));
     }
     return decoded;
@@ -55,7 +53,7 @@ export function parseWorkspaceFolderUrl(folderUrl: string): string {
 }
 
 function normalizePath(targetPath: string, platform: PlatformId): string {
-  const normalized = path.normalize(targetPath).replace(/[\\/]+$/, '');
+  const normalized = targetPath.replace(/\\/g, '/').replace(/\/+$/, '');
   return platform === 'windows' ? normalized.toLowerCase() : normalized;
 }
 

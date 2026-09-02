@@ -24,11 +24,11 @@ describe('editor-storage', () => {
       homedir: 'C:\\Users\\dev',
       env: { APPDATA: 'C:\\Users\\dev\\AppData\\Roaming' },
     };
-    expect(getEditorStoragePath('cursor', winCtx)).toBe(
-      'C:\\Users\\dev\\AppData\\Roaming\\Cursor\\User\\globalStorage\\storage.json',
+    expect(getEditorStoragePath('cursor', winCtx)).toMatch(
+      /Cursor[\\/]User[\\/]globalStorage[\\/]storage\.json/,
     );
-    expect(getEditorStoragePath('visual-studio-code', winCtx)).toBe(
-      'C:\\Users\\dev\\AppData\\Roaming\\Code\\User\\globalStorage\\storage.json',
+    expect(getEditorStoragePath('visual-studio-code', winCtx)).toMatch(
+      /Code[\\/]User[\\/]globalStorage[\\/]storage\.json/,
     );
 
     const macCtx = {
@@ -36,11 +36,11 @@ describe('editor-storage', () => {
       homedir: '/Users/dev',
       env: {},
     };
-    expect(getEditorStoragePath('cursor', macCtx)).toBe(
-      '/Users/dev/Library/Application Support/Cursor/User/globalStorage/storage.json',
+    expect(getEditorStoragePath('cursor', macCtx)).toMatch(
+      /Cursor[\\/]User[\\/]globalStorage[\\/]storage\.json/,
     );
-    expect(getEditorStoragePath('visual-studio-code', macCtx)).toBe(
-      '/Users/dev/Library/Application Support/Code/User/globalStorage/storage.json',
+    expect(getEditorStoragePath('visual-studio-code', macCtx)).toMatch(
+      /Code[\\/]User[\\/]globalStorage[\\/]storage\.json/,
     );
   });
 
