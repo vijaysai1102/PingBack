@@ -69,6 +69,11 @@ Sessions
   Status: Waiting
   Waiting: 42s
 
+● Claude
+  Project: FinBot
+  Status: Working
+  Running: 1m 15s
+
 2 active sessions
 1 session needs your attention.
 ```
