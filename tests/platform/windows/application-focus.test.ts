@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { WindowsApplicationFocusPlatform } from '../../../src/platform/windows/application-focus.js';
 
 describe('WindowsApplicationFocusPlatform', () => {
@@ -54,5 +57,98 @@ describe('WindowsApplicationFocusPlatform', () => {
     expect(calls[0]?.args).toContain('-NoProfile');
     expect(calls[0]?.args).toContain('-NonInteractive');
     expect(calls[0]?.args.at(-1)).toContain('Get-Process -Id 101');
+  });
+
+  it('discovers running Cursor via workspace metadata when command line has no project path', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pb-win-focus-'));
+    const cursorDir = path.join(
+      dir,
+      'AppData',
+      'Roaming',
+      'Cursor',
+      'User',
+      'globalStorage',
+    );
+    mkdirSync(cursorDir, { recursive: true });
+    writeFileSync(
+      path.join(cursorDir, 'storage.json'),
+      JSON.stringify({
+        windowsState: {
+          openedWindows: [{ folder: 'file:///c%3A/Code/FinBot' }],
+        },
+      }),
+    );
+
+    try {
+      const host = {
+        platform: 'win32' as const,
+        homedir: dir,
+        env: { APPDATA: path.join(dir, 'AppData', 'Roaming') },
+        uid: '1000',
+        tmpdir: dir,
+      };
+
+      const platform = new WindowsApplicationFocusPlatform(
+        () =>
+          Promise.resolve({
+            stdout: JSON.stringify([
+              {
+                Name: 'Cursor.exe',
+                CommandLine:
+                  '"C:\\Users\\dev\\AppData\\Local\\Programs\\cursor\\Cursor.exe"',
+                ProcessId: 505,
+              },
+            ]),
+            stderr: '',
+            exitCode: 0,
+          }),
+        host,
+      );
+
+      await expect(platform.discover('C:\\Code\\FinBot')).resolves.toEqual([
+        {
+          id: 'cursor',
+          name: 'Cursor',
+          projectPaths: ['C:\\Code\\FinBot'],
+          processId: 505,
+        },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to CLI launcher when SetForegroundWindow returns false', async () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    const host = {
+      platform: 'win32' as const,
+      homedir: 'C:\\Users\\dev',
+      env: {},
+      uid: '1000',
+      tmpdir: 'C:\\Temp',
+    };
+
+    const platform = new WindowsApplicationFocusPlatform((command, args) => {
+      calls.push({ command, args });
+      if (command === 'powershell.exe') {
+        // Simulates Electron returning False because MainWindowHandle is 0
+        return Promise.resolve({ stdout: 'False\r\n', stderr: '', exitCode: 0 });
+      }
+      return Promise.resolve({ stdout: '', stderr: '', exitCode: 0 });
+    }, host);
+
+    await expect(
+      platform.focus({
+        id: 'cursor',
+        name: 'Cursor',
+        projectPaths: ['C:\\Code\\FinBot'],
+        processId: 505,
+      }),
+    ).resolves.toBe(true);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.command).toBe('powershell.exe');
+    expect(calls[1]?.command).toBe('cmd.exe');
+    expect(calls[1]?.args).toEqual(['/c', 'cursor', 'C:\\Code\\FinBot']);
   });
 });

@@ -3,7 +3,7 @@ import {
   ProjectApplicationFocusService,
   type ApplicationFocusService,
 } from './project-association.js';
-import type { PlatformId } from '../platform/platform.js';
+import { readHostInfo, type HostInfo, type PlatformId } from '../platform/platform.js';
 import { WindowsApplicationFocusPlatform } from '../platform/windows/application-focus.js';
 import { MacosApplicationFocusPlatform } from '../platform/macos/application-focus.js';
 
@@ -11,10 +11,11 @@ import { MacosApplicationFocusPlatform } from '../platform/macos/application-foc
 export function createApplicationFocus(
   platform: PlatformId,
   run?: CommandRunner,
+  host: HostInfo = readHostInfo(),
 ): ApplicationFocusService {
   const applicationPlatform =
     platform === 'windows'
-      ? new WindowsApplicationFocusPlatform(run)
-      : new MacosApplicationFocusPlatform(run);
+      ? new WindowsApplicationFocusPlatform(run, host)
+      : new MacosApplicationFocusPlatform(run, host);
   return new ProjectApplicationFocusService(applicationPlatform, platform);
 }
