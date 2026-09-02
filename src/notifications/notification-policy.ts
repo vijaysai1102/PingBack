@@ -64,9 +64,7 @@ function eventSettings(
     case 'task_completed':
       return config.events.task_completed;
     case 'attention_required':
-      // Permission and input prompts are explicitly blocking, so they do not
-      // inherit the normal completion delay.
-      return { enabled: true, delaySeconds: 0 };
+      return config.events.attention_required;
   }
 }
 

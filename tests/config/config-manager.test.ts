@@ -28,9 +28,10 @@ function defaults(): PingBackConfig {
       enabled: true,
       sound: { enabled: true, volume: 1 },
       events: {
+        attention_required: { enabled: true, delaySeconds: 5 },
         question: { enabled: true, delaySeconds: 5 },
-        turn_completion: { enabled: true, delaySeconds: 3 },
-        error: { enabled: true, delaySeconds: 3 },
+        turn_completion: { enabled: true, delaySeconds: 5 },
+        error: { enabled: true, delaySeconds: 5 },
         task_completed: { enabled: true, delaySeconds: 5 },
       },
     },
@@ -42,9 +43,10 @@ describe('DEFAULT_CONFIG', () => {
   it('enables notifications and sound with the v0.2 event delays', () => {
     expect(DEFAULT_CONFIG.notifications.enabled).toBe(true);
     expect(DEFAULT_CONFIG.notifications.sound).toEqual({ enabled: true, volume: 1 });
+    expect(DEFAULT_CONFIG.notifications.events.attention_required.delaySeconds).toBe(5);
     expect(DEFAULT_CONFIG.notifications.events.question.delaySeconds).toBe(5);
-    expect(DEFAULT_CONFIG.notifications.events.turn_completion.delaySeconds).toBe(3);
-    expect(DEFAULT_CONFIG.notifications.events.error.delaySeconds).toBe(3);
+    expect(DEFAULT_CONFIG.notifications.events.turn_completion.delaySeconds).toBe(5);
+    expect(DEFAULT_CONFIG.notifications.events.error.delaySeconds).toBe(5);
     expect(DEFAULT_CONFIG.notifications.events.task_completed.delaySeconds).toBe(5);
   });
 });
@@ -68,7 +70,24 @@ describe('normalizeConfig', () => {
       enabled: false,
       delaySeconds: 9,
     });
-    expect(result.config.notifications.events.error.delaySeconds).toBe(3);
+    expect(result.config.notifications.events.error.delaySeconds).toBe(5);
+  });
+
+  it('migrates legacy 3-second defaults to 5 seconds without changing custom delays', () => {
+    const result = normalizeConfig({
+      notifications: {
+        events: {
+          turn_completion: { enabled: true, delaySeconds: 3 },
+          error: { enabled: true, delaySeconds: 3 },
+          question: { enabled: true, delaySeconds: 8 },
+        },
+      },
+    });
+
+    expect(result.config.notifications.events.turn_completion.delaySeconds).toBe(5);
+    expect(result.config.notifications.events.error.delaySeconds).toBe(5);
+    expect(result.config.notifications.events.question.delaySeconds).toBe(8);
+    expect(result.config.notifications.events.attention_required.delaySeconds).toBe(5);
   });
 
   it('accepts a valid config with no warnings', () => {
@@ -188,6 +207,9 @@ describe('config keys', () => {
     expect(isConfigKey('notifications.enabled')).toBe(true);
     expect(isConfigKey('notifications.sound.enabled')).toBe(true);
     expect(isConfigKey('notifications.sound.volume')).toBe(true);
+    expect(isConfigKey('notifications.events.attention_required.delaySeconds')).toBe(
+      true,
+    );
     expect(isConfigKey('notifications.events.question.delaySeconds')).toBe(true);
     expect(isConfigKey('logLevel')).toBe(true);
     expect(isConfigKey('nope')).toBe(false);
@@ -207,9 +229,10 @@ describe('config keys', () => {
       enabled: true,
       sound: { enabled: true, volume: 1 },
       events: {
+        attention_required: { enabled: true, delaySeconds: 5 },
         question: { enabled: true, delaySeconds: 5 },
-        turn_completion: { enabled: true, delaySeconds: 3 },
-        error: { enabled: true, delaySeconds: 3 },
+        turn_completion: { enabled: true, delaySeconds: 5 },
+        error: { enabled: true, delaySeconds: 5 },
         task_completed: { enabled: true, delaySeconds: 5 },
       },
     });

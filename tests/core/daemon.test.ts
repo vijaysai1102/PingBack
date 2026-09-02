@@ -76,6 +76,22 @@ function makeDaemon(
   return { daemon, sessions, notifier };
 }
 
+function immediateConfig(
+  overrides: Partial<PingBackConfig['notifications']> = {},
+): PingBackConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    notifications: {
+      ...DEFAULT_CONFIG.notifications,
+      events: {
+        ...DEFAULT_CONFIG.notifications.events,
+        attention_required: { enabled: true, delaySeconds: 0 },
+      },
+      ...overrides,
+    },
+  };
+}
+
 function eventPayload(overrides: Record<string, unknown> = {}): unknown {
   return {
     agent: 'claude',
@@ -99,14 +115,31 @@ afterEach(() => {
 });
 
 describe('Daemon.ingest', () => {
-  it('accepts a valid event and notifies', async () => {
-    const { daemon, notifier } = makeDaemon();
+  it('accepts a valid event and notifies immediately when delay is zero', async () => {
+    const { daemon, notifier } = makeDaemon({ config: immediateConfig() });
     const ack = await daemon.ingest(eventPayload({ id: 'e1' }));
 
     expect(ack).toEqual({ accepted: true, duplicate: false, notified: true });
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]?.priority).toBe('high');
     expect(notifier.sent[0]?.project).toBe('finbot');
+  });
+
+  it('delivers attention_required after its default 5s delay', async () => {
+    vi.useFakeTimers();
+    try {
+      const { daemon, notifier } = makeDaemon();
+      const ack = await daemon.ingest(eventPayload({ id: 'e1' }));
+
+      expect(ack).toEqual({ accepted: true, duplicate: false, notified: false });
+      expect(notifier.sent).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(notifier.sent).toHaveLength(1);
+      expect(notifier.sent[0]?.priority).toBe('high');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('tracks the session', async () => {
@@ -130,7 +163,10 @@ describe('Daemon.ingest', () => {
         return Promise.resolve(true);
       },
     };
-    const { daemon, notifier } = makeDaemon({ applicationFocus });
+    const { daemon, notifier } = makeDaemon({
+      applicationFocus,
+      config: immediateConfig(),
+    });
 
     await daemon.ingest(eventPayload({ id: 'e1' }));
     await notifier.sent[0]?.onActivate?.();
@@ -146,7 +182,7 @@ describe('Daemon.ingest', () => {
   });
 
   it('reports a duplicate without notifying twice', async () => {
-    const { daemon, notifier } = makeDaemon();
+    const { daemon, notifier } = makeDaemon({ config: immediateConfig() });
     await daemon.ingest(eventPayload({ id: 'e1' }));
     const second = await daemon.ingest(eventPayload({ id: 'e1' }));
 
@@ -179,7 +215,7 @@ describe('Daemon.ingest', () => {
       ).resolves.toEqual({ accepted: true, duplicate: false, notified: false });
       expect(notifier.sent).toHaveLength(0);
 
-      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(notifier.sent).toHaveLength(1);
       expect(notifier.sent[0]?.priority).toBe('medium');
     } finally {
@@ -194,7 +230,7 @@ describe('Daemon.ingest', () => {
       await daemon.ingest(eventPayload({ id: 'e1', type: 'error' }));
       daemon.updateSession({ sessionId: 'session-a', status: 'working' });
 
-      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(notifier.sent).toHaveLength(0);
     } finally {
       vi.useRealTimers();
@@ -202,7 +238,7 @@ describe('Daemon.ingest', () => {
   });
 
   it('sends a sound for high-priority events', async () => {
-    const { daemon, notifier } = makeDaemon();
+    const { daemon, notifier } = makeDaemon({ config: immediateConfig() });
     await daemon.ingest(eventPayload({ id: 'e1' }));
 
     expect(notifier.sent[0]?.sound).toBe(true);
@@ -226,13 +262,9 @@ describe('Daemon.ingest', () => {
 
   it('honours the sound:false config', async () => {
     const { daemon, notifier } = makeDaemon({
-      config: {
-        notifications: {
-          ...DEFAULT_CONFIG.notifications,
-          sound: { enabled: false, volume: 1 },
-        },
-        logLevel: 'info',
-      },
+      config: immediateConfig({
+        sound: { enabled: false, volume: 1 },
+      }),
     });
     await daemon.ingest(eventPayload({ id: 'e1' }));
 

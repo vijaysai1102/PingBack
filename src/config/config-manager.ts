@@ -3,9 +3,10 @@ import { isLogLevel, type LogLevel } from '../utils/logger.js';
 import { readJsonFile, writeJsonFileAtomic } from '../utils/json-file.js';
 
 export type NotificationEventName =
-  'question' | 'turn_completion' | 'error' | 'task_completed';
+  'attention_required' | 'question' | 'turn_completion' | 'error' | 'task_completed';
 
 export const NOTIFICATION_EVENT_NAMES: readonly NotificationEventName[] = [
+  'attention_required',
   'question',
   'turn_completion',
   'error',
@@ -38,9 +39,10 @@ export const DEFAULT_CONFIG: PingBackConfig = {
     enabled: true,
     sound: { enabled: true, volume: 1 },
     events: {
+      attention_required: { enabled: true, delaySeconds: 5 },
       question: { enabled: true, delaySeconds: 5 },
-      turn_completion: { enabled: true, delaySeconds: 3 },
-      error: { enabled: true, delaySeconds: 3 },
+      turn_completion: { enabled: true, delaySeconds: 5 },
+      error: { enabled: true, delaySeconds: 5 },
       task_completed: { enabled: true, delaySeconds: 5 },
     },
   },
@@ -183,7 +185,10 @@ export function normalizeConfig(raw: unknown): ConfigLoadResult {
               `notifications.events.${event}.enabled`,
               warnings,
             );
-            const delay = normalizeDelay(entry.delaySeconds, event, warnings);
+            let delay = normalizeDelay(entry.delaySeconds, event, warnings);
+            if (delay === 3 && (event === 'turn_completion' || event === 'error')) {
+              delay = 5;
+            }
             config.notifications.events[event].enabled =
               eventEnabled ?? config.notifications.events[event].enabled;
             config.notifications.events[event].delaySeconds =
@@ -294,7 +299,7 @@ function eventKeyParts(
   key: ConfigPath,
 ): { event: NotificationEventName; field: 'enabled' | 'delaySeconds' } | undefined {
   const match =
-    /^notifications\.events\.(question|turn_completion|error|task_completed)\.(enabled|delaySeconds)$/.exec(
+    /^notifications\.events\.(attention_required|question|turn_completion|error|task_completed)\.(enabled|delaySeconds)$/.exec(
       key,
     );
   if (match === null) return undefined;

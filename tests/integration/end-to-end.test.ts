@@ -108,7 +108,8 @@ describe('the PingBack v0.1 target scenario', () => {
       4242,
     );
 
-    // A desktop notification is raised, with sound, naming the project.
+    // A desktop notification is raised, with sound, naming the project after the delay.
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]).toMatchObject({
       title: 'Claude Code needs your attention',
@@ -148,7 +149,7 @@ describe('the PingBack v0.1 target scenario', () => {
       4242,
     );
     expect(sessions.get('sess-1')?.status).toBe('completed');
-  });
+  }, 10_000);
 
   it('stays silent while nothing needs attention', async () => {
     await fireHook({ session_id: 's', cwd: '/code/x', hook_event_name: 'SessionStart' });
@@ -176,11 +177,11 @@ describe('the PingBack v0.1 target scenario', () => {
       message: 'Claude is waiting for your input',
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 3_050));
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
     expect(notifier.sent).toHaveLength(1);
     expect(notifier.sent[0]?.priority).toBe('low');
     expect(sessions.get('s')?.status).toBe('waiting');
-  });
+  }, 10_000);
 
   it('raises a medium-priority alert when Claude hits an API error', async () => {
     await fireHook({
@@ -191,7 +192,7 @@ describe('the PingBack v0.1 target scenario', () => {
       last_assistant_message: 'API Error: Rate limit reached',
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 3_050));
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
     expect(notifier.sent[0]).toMatchObject({
       title: 'Claude Code hit an error',
       message: 'API Error: Rate limit reached',
@@ -199,7 +200,7 @@ describe('the PingBack v0.1 target scenario', () => {
       sound: true,
     });
     expect(sessions.get('s')?.status).toBe('error');
-  });
+  }, 10_000);
 
   it('tracks three concurrent projects without mixing them up', async () => {
     for (const [id, project] of [
@@ -216,6 +217,7 @@ describe('the PingBack v0.1 target scenario', () => {
       });
     }
 
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
     expect(sessions.size).toBe(3);
     expect(notifier.sent.map((n) => n.project)).toEqual(['alpha', 'beta', 'gamma']);
 
@@ -223,7 +225,7 @@ describe('the PingBack v0.1 target scenario', () => {
     expect(formatRunningStatus(status, Date.now())).toContain(
       '3 sessions need your attention.',
     );
-  });
+  }, 10_000);
 
   it('raises a single notification when a hook fires twice', async () => {
     const payload = {
@@ -237,8 +239,9 @@ describe('the PingBack v0.1 target scenario', () => {
     await fireHook(payload);
     await fireHook(payload);
 
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
     expect(notifier.sent).toHaveLength(1);
-  });
+  }, 10_000);
 
   it('rejects a malformed event without disturbing the daemon', async () => {
     await expect(

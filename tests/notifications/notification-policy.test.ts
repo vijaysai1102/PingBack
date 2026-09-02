@@ -14,9 +14,10 @@ function notificationConfig(
     enabled: true,
     sound: { enabled: true, volume: 0.8 },
     events: {
+      attention_required: { enabled: true, delaySeconds: 5 },
       question: { enabled: true, delaySeconds: 5 },
-      turn_completion: { enabled: true, delaySeconds: 3 },
-      error: { enabled: true, delaySeconds: 3 },
+      turn_completion: { enabled: true, delaySeconds: 5 },
+      error: { enabled: true, delaySeconds: 5 },
       task_completed: { enabled: true, delaySeconds: 5 },
     },
     ...overrides,
@@ -101,7 +102,7 @@ describe('buildNotification', () => {
       project: 'finbot',
       sound: true,
       volume: 0.8,
-      delaySeconds: 0,
+      delaySeconds: 5,
     });
   });
 
@@ -117,7 +118,7 @@ describe('buildNotification', () => {
       notificationConfig(),
     );
 
-    expect(request).toMatchObject({ delaySeconds: 3 });
+    expect(request).toMatchObject({ delaySeconds: 5 });
   });
 
   it('uses the turn-completion delay for normal Claude idle notifications', () => {
@@ -129,7 +130,21 @@ describe('buildNotification', () => {
       notificationConfig(),
     );
 
-    expect(request).toMatchObject({ delaySeconds: 3, sound: true });
+    expect(request).toMatchObject({ delaySeconds: 5, sound: true });
+  });
+
+  it('uses the event-specific delay for attention_required', () => {
+    const request = buildNotification(
+      routed(),
+      notificationConfig({
+        events: {
+          ...notificationConfig().events,
+          attention_required: { enabled: true, delaySeconds: 10 },
+        },
+      }),
+    );
+
+    expect(request).toMatchObject({ delaySeconds: 10 });
   });
 
   it('does not build a notification for a disabled event type', () => {

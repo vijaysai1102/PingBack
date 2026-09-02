@@ -125,20 +125,21 @@ pingback config
 pingback config get notifications
 pingback config set notifications.sound.enabled false
 pingback config set notifications.sound.volume 0.8
-pingback config set notifications.events.question.delaySeconds 5
+pingback config set notifications.events.attention_required.delaySeconds 5
 ```
 
-| Key                                                 | Values                 | Default |
-| --------------------------------------------------- | ---------------------- | ------- |
-| `notifications.enabled`                             | `true` / `false`       | `true`  |
-| `notifications.sound.enabled`                       | `true` / `false`       | `true`  |
-| `notifications.sound.volume`                        | number from `0` to `1` | `1`     |
-| `notifications.events.question.delaySeconds`        | non-negative seconds   | `5`     |
-| `notifications.events.turn_completion.delaySeconds` | non-negative seconds   | `3`     |
-| `notifications.events.error.delaySeconds`           | non-negative seconds   | `3`     |
-| `notifications.events.task_completed.delaySeconds`  | non-negative seconds   | `5`     |
+| Key                                                    | Values                 | Default |
+| ------------------------------------------------------ | ---------------------- | ------- |
+| `notifications.enabled`                                | `true` / `false`       | `true`  |
+| `notifications.sound.enabled`                          | `true` / `false`       | `true`  |
+| `notifications.sound.volume`                           | number from `0` to `1` | `1`     |
+| `notifications.events.attention_required.delaySeconds` | non-negative seconds   | `5`     |
+| `notifications.events.question.delaySeconds`           | non-negative seconds   | `5`     |
+| `notifications.events.turn_completion.delaySeconds`    | non-negative seconds   | `5`     |
+| `notifications.events.error.delaySeconds`              | non-negative seconds   | `5`     |
+| `notifications.events.task_completed.delaySeconds`     | non-negative seconds   | `5`     |
 
-Every event also supports an `.enabled` boolean at the same path. Blocking permission and input requests notify immediately. Existing v0.1 `notifications.desktop` and boolean `notifications.sound` settings are read safely as backward-compatible inputs.
+Every event also supports an `.enabled` boolean at the same path. By default, all events wait 5 seconds before firing so you have time to respond directly in the terminal without interruption. Setting `delaySeconds` to `0` causes an event to notify immediately. Existing v0.1 `notifications.desktop` and boolean `notifications.sound` settings are read safely as backward-compatible inputs.
 
 Restart PingBack after changing settings:
 
@@ -270,7 +271,7 @@ To try local changes against real Claude Code:
 ```bash
 npm run build
 npm pack
-npm install -g ./pingback-cli-0.2.0.tgz
+npm install -g ./pingback-cli-0.2.1.tgz
 pingback setup
 ```
 
