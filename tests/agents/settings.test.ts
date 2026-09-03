@@ -106,6 +106,31 @@ describe('installHooks', () => {
     expect(twice).toEqual(once);
   });
 
+  it('removes a retired PingBack hook while preserving the supported hooks', () => {
+    const settingsWithRetiredHook = {
+      hooks: {
+        Stop: [
+          {
+            matcher: '*',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: ['C:\\npm\\pingback\\dist\\agents\\claude\\hook-entry.js'],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = installHooks(settingsWithRetiredHook, spec);
+    const hooks = result.hooks as Record<string, unknown>;
+
+    expect(hooks.Stop).toBeUndefined();
+    expect(hooks.Notification).toBeDefined();
+  });
+
   it('replaces a handler installed at a previous path', () => {
     const old = installHooks({}, { command: 'node', scriptPath: '/old/hook-entry.js' });
     const updated = installHooks(old, spec);

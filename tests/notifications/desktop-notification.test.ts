@@ -91,7 +91,7 @@ describe('formatBody', () => {
 });
 
 describe('DesktopNotificationService', () => {
-  it('sends the title, body and app name to the notifier', async () => {
+  it('sends the title and body to the notifier', async () => {
     const { notifier, calls } = fakeNotifier();
     const service = new DesktopNotificationService({
       sound: new RecordingSound(),
@@ -105,8 +105,20 @@ describe('DesktopNotificationService', () => {
     expect(calls[0]).toMatchObject({
       title: 'Claude Code needs your attention',
       message: 'Claude is waiting for permission.\nProject: finbot',
-      appName: APP_NAME,
     });
+  });
+
+  it('uses PingBack as the native notification identity on every supported platform', async () => {
+    const { notifier, calls } = fakeNotifier();
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await service.notify(request());
+
+    expect(calls[0]?.appName).toBe(APP_NAME);
   });
 
   it('disables the toast sound so PingBack controls the tone', async () => {
@@ -172,6 +184,86 @@ describe('DesktopNotificationService', () => {
     expect(activations).toBe(1);
   });
 
+  it('runs the session-bound activation handler for the Windows SnoreToast action result', async () => {
+    let activations = 0;
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, {
+          action: 'buttonClicked',
+          button: 'Open Project',
+          activationType: 'Open Project',
+        });
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await service.notify(
+      request({
+        onActivate: () => {
+          activations += 1;
+        },
+      }),
+    );
+
+    expect(activations).toBe(1);
+  });
+
+  it('records when Windows returns an Open Project action', async () => {
+    const { logger, records } = recordingLogger();
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, {
+          action: 'buttonClicked',
+          button: 'Open Project',
+          activationType: 'Open Project',
+        });
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      logger,
+      available: true,
+    });
+
+    await service.notify(request({ onActivate: () => undefined }));
+
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        msg: 'notification activation received',
+      }),
+    );
+  });
+
+  it('runs the session-bound activation handler for the macOS action metadata', async () => {
+    let activations = 0;
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, undefined, { activationValue: 'Open Project' });
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await service.notify(
+      request({
+        onActivate: () => {
+          activations += 1;
+        },
+      }),
+    );
+
+    expect(activations).toBe(1);
+  });
+
   it('returns after dispatching an activatable notification without waiting for a click', async () => {
     let activationCallback:
       ((error: Error | null, response?: string) => void) | undefined;
@@ -190,6 +282,25 @@ describe('DesktopNotificationService', () => {
       service.notify(request({ onActivate: () => undefined })),
     ).resolves.toBeUndefined();
     expect(activationCallback).toBeDefined();
+  });
+
+  it('adds an Open Project action when a session has an associated application', async () => {
+    let options: Record<string, unknown> | undefined;
+    const notifier: NotifierLike = {
+      notify(notificationOptions, callback) {
+        options = notificationOptions;
+        callback(null);
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      available: true,
+    });
+
+    await service.notify(request({ onActivate: () => undefined }));
+
+    expect(options?.actions).toEqual(['Open Project']);
   });
 
   it('still resolves when the notifier reports an error', async () => {
@@ -277,6 +388,58 @@ describe('DesktopNotificationService', () => {
 
     expect(records.map((record) => record.msg)).toContain('desktop notification failed');
     expect(records.map((record) => record.msg)).not.toContain('notification delivered');
+  });
+
+  it('records a hidden Windows toast as not visible', async () => {
+    const { logger, records } = recordingLogger();
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, { action: 'hidden', activationType: 'hidden' });
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      logger,
+      available: true,
+    });
+
+    await service.notify(request());
+
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        msg: 'desktop notification hidden',
+      }),
+    );
+    expect(records.map((record) => record.msg)).not.toContain('notification delivered');
+  });
+
+  it('records a timed-out Windows toast without calling it hidden', async () => {
+    const { logger, records } = recordingLogger();
+    const notifier: NotifierLike = {
+      notify(_options, callback) {
+        callback(null, { action: 'timedout', activationType: 'timedout' });
+      },
+    };
+    const service = new DesktopNotificationService({
+      sound: new RecordingSound(),
+      notifier,
+      logger,
+      available: true,
+    });
+
+    await service.notify(request());
+
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        level: 'info',
+        msg: 'desktop notification timed out',
+      }),
+    );
+    expect(records.map((record) => record.msg)).not.toContain(
+      'desktop notification hidden',
+    );
   });
 
   it('delivers the toast even when the sound player rejects', async () => {

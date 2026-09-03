@@ -73,7 +73,7 @@ describe('normalizeConfig', () => {
     expect(result.config.notifications.events.error.delaySeconds).toBe(5);
   });
 
-  it('migrates legacy 3-second defaults to 5 seconds without changing custom delays', () => {
+  it('preserves explicit event delays instead of rewriting them to the defaults', () => {
     const result = normalizeConfig({
       notifications: {
         events: {
@@ -84,8 +84,8 @@ describe('normalizeConfig', () => {
       },
     });
 
-    expect(result.config.notifications.events.turn_completion.delaySeconds).toBe(5);
-    expect(result.config.notifications.events.error.delaySeconds).toBe(5);
+    expect(result.config.notifications.events.turn_completion.delaySeconds).toBe(3);
+    expect(result.config.notifications.events.error.delaySeconds).toBe(3);
     expect(result.config.notifications.events.question.delaySeconds).toBe(8);
     expect(result.config.notifications.events.attention_required.delaySeconds).toBe(5);
   });

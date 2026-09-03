@@ -10,7 +10,7 @@ export interface NotificationRequest {
   sound: boolean;
   /** The configured sound level, from silent (0) to full (1). */
   volume: number;
-  /** Delay before desktop delivery; blocking attention events use zero. */
+  /** Configured delay before desktop delivery. */
   delaySeconds: number;
   /** Runs after a supported native notification activation. */
   onActivate?: (() => void | Promise<void>) | undefined;

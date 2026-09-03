@@ -1,11 +1,16 @@
 import { createDaemon } from './create-daemon.js';
+import { ensureNotificationRegistration } from '../platform/notification-registration.js';
 
 /**
  * Entry point for the background daemon process. Started detached by
  * `pingback start`; never intended to be run in the foreground by users.
  */
 async function run(): Promise<void> {
-  const { daemon, logger } = createDaemon();
+  const { daemon, logger, platform } = createDaemon();
+
+  if (!(await ensureNotificationRegistration(platform))) {
+    logger.warn('native notification registration unavailable');
+  }
 
   daemon.onStopped(() => {
     process.exitCode = 0;

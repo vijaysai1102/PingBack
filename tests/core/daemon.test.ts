@@ -6,7 +6,12 @@ import { Daemon } from '../../src/core/daemon.js';
 import { DaemonState } from '../../src/core/daemon-state.js';
 import { SessionManager } from '../../src/sessions/session-manager.js';
 import { createPlatform, type Platform } from '../../src/platform/platform.js';
-import { silentLogger } from '../../src/utils/logger.js';
+import {
+  createLogger,
+  silentLogger,
+  type Logger,
+  type LogRecord,
+} from '../../src/utils/logger.js';
 import { DEFAULT_CONFIG, type PingBackConfig } from '../../src/config/config-manager.js';
 import type {
   NotificationRequest,
@@ -51,6 +56,7 @@ function makeDaemon(
     config?: PingBackConfig;
     claudeConnected?: () => boolean;
     applicationFocus?: ApplicationFocusService;
+    logger?: Logger;
   } = {},
 ): { daemon: Daemon; sessions: SessionManager; notifier: RecordingNotifier } {
   const notifier = (overrides.notifier ?? new RecordingNotifier()) as RecordingNotifier;
@@ -62,7 +68,7 @@ function makeDaemon(
     sessions,
     notifications: notifier,
     state: new DaemonState(dir),
-    logger: silentLogger(),
+    logger: overrides.logger ?? silentLogger(),
     version: '0.1.0',
     now: () => clock,
     ...(overrides.applicationFocus === undefined
@@ -174,6 +180,38 @@ describe('Daemon.ingest', () => {
     expect(focused).toBe(true);
   });
 
+  it('refreshes the project-matched editor before focusing it from a notification action', async () => {
+    const initialApplication: ApplicationInfo = {
+      id: 'visual-studio-code',
+      name: 'Visual Studio Code',
+      projectPaths: ['/Users/dev/finbot'],
+    };
+    const refreshedApplication: ApplicationInfo = {
+      id: 'cursor',
+      name: 'Cursor',
+      projectPaths: ['/Users/dev/finbot'],
+    };
+    let detected = 0;
+    let focusedApplication: ApplicationInfo | undefined;
+    const applicationFocus: ApplicationFocusService = {
+      detectApplication: () =>
+        Promise.resolve(detected++ === 0 ? initialApplication : refreshedApplication),
+      focusApplication: (application) => {
+        focusedApplication = application;
+        return Promise.resolve(true);
+      },
+    };
+    const { daemon, notifier } = makeDaemon({
+      applicationFocus,
+      config: immediateConfig(),
+    });
+
+    await daemon.ingest(eventPayload({ id: 'e1' }));
+    await notifier.sent[0]?.onActivate?.();
+
+    expect(focusedApplication).toEqual(refreshedApplication);
+  });
+
   it('rejects a malformed event', async () => {
     const { daemon } = makeDaemon();
 
@@ -242,6 +280,25 @@ describe('Daemon.ingest', () => {
     await daemon.ingest(eventPayload({ id: 'e1' }));
 
     expect(notifier.sent[0]?.sound).toBe(true);
+  });
+
+  it('records a native notification as dispatched until Windows reports its outcome', async () => {
+    const records: LogRecord[] = [];
+    const logger = createLogger({
+      level: 'debug',
+      sinks: [(record) => records.push(record)],
+    });
+    const { daemon } = makeDaemon({ config: immediateConfig(), logger });
+
+    await daemon.ingest(eventPayload({ id: 'e1' }));
+
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        level: 'debug',
+        msg: 'notification dispatched',
+      }),
+    );
+    expect(records.map((record) => record.msg)).not.toContain('notification delivered');
   });
 
   it('honours the desktop:false config', async () => {

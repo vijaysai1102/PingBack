@@ -213,7 +213,23 @@ export class Daemon {
       const application = await applicationFocus.detectApplication(routed.session);
       if (application !== undefined) {
         request.onActivate = async () => {
-          await applicationFocus.focusApplication(application);
+          const currentApplication = await applicationFocus.detectApplication(
+            routed.session,
+          );
+          const focused = await applicationFocus.focusApplication(currentApplication);
+          const context = {
+            sessionId: routed.session.id,
+            applicationId: currentApplication?.id,
+          };
+
+          if (focused) {
+            this.#logger.info('notification activation focused application', context);
+          } else {
+            this.#logger.warn(
+              'notification activation could not focus application',
+              context,
+            );
+          }
         };
       }
     }
@@ -242,7 +258,7 @@ export class Daemon {
   ): Promise<boolean> {
     try {
       await this.#options.notifications.notify(request);
-      this.#logger.debug('notification delivered', { priority: request.priority });
+      this.#logger.debug('notification dispatched', { priority: request.priority });
       return true;
     } catch (error) {
       // Session tracking must survive a notification backend failure.

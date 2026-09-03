@@ -12,11 +12,13 @@
  */
 import { createPlatform } from '../../platform/platform.js';
 import { DaemonClient } from '../../core/daemon-client.js';
+import { startDaemon } from '../../core/daemon-starter.js';
 import { normalizeHookPayload } from './normalize.js';
 import type { ClaudeHookPayload } from './types.js';
 
 const STDIN_TIMEOUT_MS = 800;
 const IPC_TIMEOUT_MS = 1200;
+const DAEMON_RECOVERY_TIMEOUT_MS = 3000;
 
 async function readStdin(): Promise<string> {
   return new Promise<string>((resolve) => {
@@ -39,6 +41,36 @@ async function readStdin(): Promise<string> {
     process.stdin.on('end', finish);
     process.stdin.on('error', finish);
   });
+}
+
+/**
+ * Preserves the original event when a daemon was stopped between Claude hook
+ * invocations. Recovery remains bounded so the hook cannot hold up Claude.
+ */
+export async function deliverWithDaemonRecovery<T>(
+  deliver: () => Promise<T>,
+  start: () => Promise<boolean>,
+  timeoutMs: number = DAEMON_RECOVERY_TIMEOUT_MS,
+): Promise<T | undefined> {
+  try {
+    return await deliver();
+  } catch {
+    const recovered = await Promise.race([
+      start()
+        .then(() => true)
+        .catch(() => false),
+      new Promise<boolean>((resolve) => {
+        setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+    if (!recovered) return undefined;
+
+    try {
+      return await deliver();
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 export async function runHook(): Promise<void> {
@@ -68,7 +100,10 @@ export async function runHook(): Promise<void> {
     return;
   }
 
-  await client.sendEvent({ ...normalized.event, pid });
+  await deliverWithDaemonRecovery(
+    () => client.sendEvent({ ...normalized.event, pid }),
+    startDaemon,
+  );
 }
 
 function claudeProcessId(): number | undefined {

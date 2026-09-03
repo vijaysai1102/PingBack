@@ -117,7 +117,12 @@ export function installHooks(
 ): Record<string, unknown> {
   const root = { ...(asRecord(settings) ?? {}) };
   const existingHooks = asRecord(root.hooks) ?? {};
-  const hooks: Record<string, unknown> = { ...existingHooks };
+  const hooks: Record<string, unknown> = Object.fromEntries(
+    Object.entries(existingHooks).map(([event, groups]) => [
+      event,
+      Array.isArray(groups) ? stripPingBackHandlers(groups) : groups,
+    ]),
+  );
 
   for (const event of CLAUDE_HOOK_EVENTS) {
     const groups = stripPingBackHandlers(hooks[event]);
@@ -125,7 +130,7 @@ export function installHooks(
     hooks[event] = groups;
   }
 
-  root.hooks = hooks;
+  root.hooks = withoutEmptyEvents(hooks);
   return root;
 }
 

@@ -185,10 +185,7 @@ export function normalizeConfig(raw: unknown): ConfigLoadResult {
               `notifications.events.${event}.enabled`,
               warnings,
             );
-            let delay = normalizeDelay(entry.delaySeconds, event, warnings);
-            if (delay === 3 && (event === 'turn_completion' || event === 'error')) {
-              delay = 5;
-            }
+            const delay = normalizeDelay(entry.delaySeconds, event, warnings);
             config.notifications.events[event].enabled =
               eventEnabled ?? config.notifications.events[event].enabled;
             config.notifications.events[event].delaySeconds =

@@ -1,6 +1,11 @@
 import path from 'node:path';
 import type { HostInfo, Platform, SoundCommand } from '../platform.js';
 
+export {
+  ensureWindowsToastRegistration,
+  installWindowsToastRegistration,
+} from './notification-registration.js';
+
 const APP_DIR = 'PingBack';
 
 /**

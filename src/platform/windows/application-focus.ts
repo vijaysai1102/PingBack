@@ -13,14 +13,65 @@ import type {
 import { readHostInfo, type HostInfo } from '../platform.js';
 
 const POWERSHELL = 'powershell.exe';
+const SUPPORTED_EDITOR_IDS = new Set(['cursor', 'visual-studio-code']);
+const RESTORE_WINDOW = 9;
 const PROCESS_QUERY =
   'Get-CimInstance -ClassName Win32_Process | Select-Object Name,CommandLine,ProcessId | ConvertTo-Json -Compress';
+const FOCUS_NATIVE_TYPE =
+  'using System; using System.Runtime.InteropServices; public static class PingBackFocus { [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool BringWindowToTop(IntPtr hWnd); [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow); [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd); [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach); [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId(); }';
+
+function focusPreamble(): string {
+  return `Add-Type -TypeDefinition '${FOCUS_NATIVE_TYPE}';`;
+}
 
 function foregroundCommand(processId: number): string {
   return [
-    'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public static class PingBackFocus { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd); }\';',
+    focusPreamble(),
     `$process = Get-Process -Id ${processId} -ErrorAction Stop;`,
-    '[PingBackFocus]::SetForegroundWindow($process.MainWindowHandle)',
+    '$window = [IntPtr]$process.MainWindowHandle;',
+    'if ($window -eq [IntPtr]::Zero) { return; }',
+    `[void][PingBackFocus]::ShowWindowAsync($window, ${RESTORE_WINDOW});`,
+    '[void][PingBackFocus]::BringWindowToTop($window);',
+    '[void][PingBackFocus]::SetForegroundWindow($window);',
+  ].join(' ');
+}
+
+function foregroundVerificationCommand(processId: number): string {
+  return [
+    focusPreamble(),
+    '$foregroundWindow = [PingBackFocus]::GetForegroundWindow();',
+    'if ($foregroundWindow -eq [IntPtr]::Zero) { $false; return; }',
+    '$foregroundProcessId = [uint32]0;',
+    '[void][PingBackFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId);',
+    `$foregroundProcessId -eq ${processId}`,
+  ].join(' ');
+}
+
+function attachedForegroundCommand(processId: number): string {
+  return [
+    focusPreamble(),
+    `$process = Get-Process -Id ${processId} -ErrorAction Stop;`,
+    '$window = [IntPtr]$process.MainWindowHandle;',
+    'if ($window -eq [IntPtr]::Zero) { return; }',
+    '$foregroundWindow = [PingBackFocus]::GetForegroundWindow();',
+    '$currentThread = [PingBackFocus]::GetCurrentThreadId();',
+    '$foregroundProcessId = [uint32]0;',
+    '$targetProcessId = [uint32]0;',
+    '$foregroundThread = [PingBackFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId);',
+    '$targetThread = [PingBackFocus]::GetWindowThreadProcessId($window, [ref]$targetProcessId);',
+    '$foregroundAttached = $false;',
+    '$targetAttached = $false;',
+    'try {',
+    'if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) { $foregroundAttached = [PingBackFocus]::AttachThreadInput($currentThread, $foregroundThread, $true); }',
+    'if ($targetThread -ne 0 -and $targetThread -ne $currentThread) { $targetAttached = [PingBackFocus]::AttachThreadInput($currentThread, $targetThread, $true); }',
+    `[void][PingBackFocus]::ShowWindowAsync($window, ${RESTORE_WINDOW});`,
+    '[void][PingBackFocus]::BringWindowToTop($window);',
+    '[void][PingBackFocus]::SetForegroundWindow($window);',
+    '[void][PingBackFocus]::SetFocus($window);',
+    '} finally {',
+    'if ($targetAttached) { [void][PingBackFocus]::AttachThreadInput($currentThread, $targetThread, $false); }',
+    'if ($foregroundAttached) { [void][PingBackFocus]::AttachThreadInput($currentThread, $foregroundThread, $false); }',
+    '}',
   ].join(' ');
 }
 
@@ -173,26 +224,33 @@ export class WindowsApplicationFocusPlatform implements ApplicationFocusPlatform
   }
 
   async focus(application: ApplicationInfo): Promise<boolean> {
+    if (!SUPPORTED_EDITOR_IDS.has(application.id)) return false;
+
     const processId = application.processId;
-    if (Number.isInteger(processId) && processId !== undefined && processId > 0) {
-      const result = await this.#run(POWERSHELL, [
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        foregroundCommand(processId),
-      ]);
-      if (result.exitCode === 0 && result.stdout.trim().toLowerCase() === 'true') {
-        return true;
-      }
+    if (
+      Number.isInteger(processId) &&
+      processId !== undefined &&
+      processId > 0 &&
+      (await this.#focusProcess(processId))
+    ) {
+      return true;
     }
 
-    // Fallback: use editor CLI launcher to bring the window to the foreground
+    // A launcher can restore the matching project window, but its successful
+    // exit does not prove that Windows granted it foreground ownership.
     const projectPath = application.projectPaths[0];
     if (projectPath !== undefined) {
       const cliPath = findEditorCli(application.id, this.#host);
       if (cliPath !== undefined) {
         const result = await this.#run('cmd.exe', ['/c', cliPath, projectPath]);
-        if (result.exitCode === 0) return true;
+        if (
+          result.exitCode === 0 &&
+          Number.isInteger(processId) &&
+          processId !== undefined &&
+          processId > 0
+        ) {
+          return this.#focusProcess(processId);
+        }
       }
       // Try bare command on PATH
       const bareCmd =
@@ -203,10 +261,45 @@ export class WindowsApplicationFocusPlatform implements ApplicationFocusPlatform
             : undefined;
       if (bareCmd !== undefined) {
         const result = await this.#run('cmd.exe', ['/c', bareCmd, projectPath]);
-        if (result.exitCode === 0) return true;
+        if (
+          result.exitCode === 0 &&
+          Number.isInteger(processId) &&
+          processId !== undefined &&
+          processId > 0
+        ) {
+          return this.#focusProcess(processId);
+        }
       }
     }
 
     return false;
+  }
+
+  async #focusProcess(processId: number): Promise<boolean> {
+    const direct = await this.#run(POWERSHELL, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      foregroundCommand(processId),
+    ]);
+    if (direct.exitCode === 0 && (await this.#isForeground(processId))) return true;
+
+    const attached = await this.#run(POWERSHELL, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      attachedForegroundCommand(processId),
+    ]);
+    return attached.exitCode === 0 && (await this.#isForeground(processId));
+  }
+
+  async #isForeground(processId: number): Promise<boolean> {
+    const result = await this.#run(POWERSHELL, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      foregroundVerificationCommand(processId),
+    ]);
+    return result.exitCode === 0 && result.stdout.trim().toLowerCase() === 'true';
   }
 }
