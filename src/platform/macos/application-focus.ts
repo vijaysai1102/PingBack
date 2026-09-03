@@ -13,6 +13,15 @@ import { readHostInfo, type HostInfo } from '../platform.js';
 const PROCESS_COMMAND = '/bin/ps';
 const PROCESS_ARGS = ['-axo', 'pid=,comm=,command='] as const;
 const APPLESCRIPT = '/usr/bin/osascript';
+const SUPPORTED_EDITOR_IDS = new Set(['cursor', 'visual-studio-code']);
+
+function activateCommand(processId: number): string {
+  return `tell application "System Events" to set frontmost of (first process whose unix id is ${processId}) to true`;
+}
+
+function frontmostCommand(processId: number): string {
+  return `tell application "System Events" to return frontmost of (first process whose unix id is ${processId})`;
+}
 
 function executableName(path: string): string {
   const segments = path.split(/[\\/]/);
@@ -105,14 +114,30 @@ export class MacosApplicationFocusPlatform implements ApplicationFocusPlatform {
   }
 
   async focus(application: ApplicationInfo): Promise<boolean> {
+    if (!SUPPORTED_EDITOR_IDS.has(application.id)) return false;
+
     const processId = application.processId;
     if (!Number.isInteger(processId) || processId === undefined || processId <= 0)
       return false;
 
-    const result = await this.#run(APPLESCRIPT, [
-      '-e',
-      `tell application "System Events" to set frontmost of (first process whose unix id is ${processId}) to true`,
-    ]);
+    return this.#focusProcess(processId);
+  }
+
+  async #focusProcess(processId: number): Promise<boolean> {
+    const initial = await this.#activate(processId);
+    if (initial && (await this.#isFrontmost(processId))) return true;
+
+    const retry = await this.#activate(processId);
+    return retry && (await this.#isFrontmost(processId));
+  }
+
+  async #activate(processId: number): Promise<boolean> {
+    const result = await this.#run(APPLESCRIPT, ['-e', activateCommand(processId)]);
     return result.exitCode === 0;
+  }
+
+  async #isFrontmost(processId: number): Promise<boolean> {
+    const result = await this.#run(APPLESCRIPT, ['-e', frontmostCommand(processId)]);
+    return result.exitCode === 0 && result.stdout.trim().toLowerCase() === 'true';
   }
 }
